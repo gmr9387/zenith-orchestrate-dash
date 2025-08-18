@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/CommandPalette";
+import { AdaptiveNavigation } from "@/components/navigation/AdaptiveNavigation";
 import { HeroMetrics } from "@/components/HeroMetrics";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { ToolCard } from "@/components/ToolCard";
@@ -24,8 +25,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen mesh-bg">
-      {/* Premium Header */}
-      <header className="glass-intense sticky top-0 z-50 border-b border-border/50">
+      {/* Revolutionary Navigation System */}
+      <AdaptiveNavigation />
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
