@@ -23,8 +23,7 @@ import crmSuiteHero from "@/assets/crm-suite-hero.jpg";
 const Index = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  const openToast = (title: string, description?: string) =>
-    toast(title, { description });
+  const openToast = (title: string, description?: string) => toast(title, { description });
 
   return (
     <div className="min-h-screen mesh-bg">
@@ -124,7 +123,7 @@ const Index = () => {
               { label: "Avg. Duration", value: "12m", color: "text-primary" }
             ]}
             actions={[
-              { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default", onClick: () => openToast("Generating Tutorial", "We will build an auto-capture flow next") },
+              { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default", onClick: () => { window.location.href = "/tutorial/record?title=New%20Tutorial"; } },
               { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Library") }
             ]}
           >
