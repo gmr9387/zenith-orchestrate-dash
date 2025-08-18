@@ -9,6 +9,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { HeroMetrics } from "@/components/HeroMetrics";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { ToolCard } from "@/components/ToolCard";
+import { toast } from "@/components/ui/sonner";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 
 // Import hero images
@@ -21,6 +22,9 @@ import crmSuiteHero from "@/assets/crm-suite-hero.jpg";
 
 const Index = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const openToast = (title: string, description?: string) =>
+    toast(title, { description });
 
   return (
     <div className="min-h-screen mesh-bg">
@@ -93,13 +97,14 @@ const Index = () => {
             description="Integration management with live network visualizations"
             image={apiHubHero}
             icon={<Share className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening API Hub", "Deep link coming soon")}
             metrics={[
               { label: "Active Integrations", value: "89", color: "text-success" },
               { label: "Data Processed", value: "2.4TB", color: "text-primary" }
             ]}
             actions={[
-              { label: "Add Integration", icon: <Plus className="h-4 w-4" />, variant: "default" },
-              { label: "Analytics", icon: <BarChart3 className="h-4 w-4" />, variant: "outline" }
+              { label: "Add Integration", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => openToast("Add Integration", "Connector gallery coming soon") },
+              { label: "Analytics", icon: <BarChart3 className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Analytics") }
             ]}
           >
             <div className="mb-4">
@@ -113,13 +118,14 @@ const Index = () => {
             description="AI-powered screen recording and tutorial generation"
             image={tutorialBuilderHero}
             icon={<Video className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening Tutorial Builder")}
             metrics={[
               { label: "Tutorials Created", value: "1,847", color: "text-success" },
               { label: "Avg. Duration", value: "12m", color: "text-primary" }
             ]}
             actions={[
-              { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default" },
-              { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline" }
+              { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default", onClick: () => openToast("Generating Tutorial", "We will build an auto-capture flow next") },
+              { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Library") }
             ]}
           >
             <div className="mb-4 p-4 bg-muted/30 rounded-xl">
@@ -141,13 +147,14 @@ const Index = () => {
             description="Browser-native video editing with Hollywood-level capabilities"
             image={videoCreatorHero}
             icon={<Video className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening Video Creator")}
             metrics={[
               { label: "Projects Active", value: "23", color: "text-warning" },
               { label: "Rendered This Week", value: "156", color: "text-success" }
             ]}
             actions={[
-              { label: "New Project", icon: <Plus className="h-4 w-4" />, variant: "default" },
-              { label: "Templates", icon: <ExternalLink className="h-4 w-4" />, variant: "outline" }
+              { label: "New Project", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => openToast("Create Video Project", "Template picker coming soon") },
+              { label: "Templates", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Templates") }
             ]}
           />
 
@@ -157,13 +164,14 @@ const Index = () => {
             description="Visual business process automation that rivals Zapier"
             image={workflowEngineHero}
             icon={<Zap className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening Workflow Engine")}
             metrics={[
               { label: "Active Workflows", value: "247", color: "text-primary" },
               { label: "Tasks Automated", value: "12.4K", color: "text-success" }
             ]}
             actions={[
-              { label: "Create Workflow", icon: <Plus className="h-4 w-4" />, variant: "default" },
-              { label: "Templates", icon: <ExternalLink className="h-4 w-4" />, variant: "outline" }
+              { label: "Create Workflow", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => openToast("Create Workflow", "Drag-and-drop builder coming soon") },
+              { label: "Templates", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Templates") }
             ]}
           />
 
@@ -173,13 +181,14 @@ const Index = () => {
             description="Low-code platform for building custom business applications"
             image={appBuilderHero}
             icon={<Wrench className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening App Builder")}
             metrics={[
               { label: "Apps Built", value: "34", color: "text-success" },
               { label: "Components", value: "500+", color: "text-primary" }
             ]}
             actions={[
-              { label: "Build App", icon: <Plus className="h-4 w-4" />, variant: "default" },
-              { label: "Component Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline" }
+              { label: "Build App", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => openToast("Build App", "Schema to React generator next") },
+              { label: "Component Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Components") }
             ]}
           />
 
@@ -189,13 +198,14 @@ const Index = () => {
             description="Next-generation customer relationship management"
             image={crmSuiteHero}
             icon={<Users className="h-6 w-6 text-primary" />}
+            onOpen={() => openToast("Opening CRM Suite")}
             metrics={[
               { label: "Active Contacts", value: "8,567", color: "text-success" },
               { label: "Pipeline Value", value: "$2.4M", color: "text-primary" }
             ]}
             actions={[
-              { label: "Add Contact", icon: <Plus className="h-4 w-4" />, variant: "default" },
-              { label: "View Pipeline", icon: <TrendingUp className="h-4 w-4" />, variant: "outline" }
+              { label: "Add Contact", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => openToast("Add Contact", "Contact form coming soon") },
+              { label: "View Pipeline", icon: <TrendingUp className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Pipeline") }
             ]}
           />
         </div>

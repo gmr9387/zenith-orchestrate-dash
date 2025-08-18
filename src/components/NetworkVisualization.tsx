@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { toast } from "@/components/ui/sonner";
 
 interface Node {
   id: string;
@@ -86,7 +87,7 @@ export function NetworkVisualization() {
 
         {/* Render nodes */}
         {nodes.map((node) => (
-          <g key={node.id}>
+          <g key={node.id} onClick={() => toast(`Node: ${node.label}`)} className="cursor-pointer">
             <circle
               cx={node.x}
               cy={node.y}
