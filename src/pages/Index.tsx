@@ -118,13 +118,20 @@ const Index = () => {
             image={tutorialBuilderHero}
             icon={<Video className="h-6 w-6 text-primary" />}
             onOpen={() => openToast("Opening Tutorial Builder")}
+            onPreview={async () => {
+              // Try opening most recent tutorial, fallback to recorder
+              const { db } = await import("@/lib/db");
+              const recent = await db.tutorials.orderBy("updatedAt").reverse().first();
+              if (recent) window.location.href = `/tutorial/${recent.id}`;
+              else window.location.href = "/tutorial/record";
+            }}
             metrics={[
               { label: "Tutorials Created", value: "1,847", color: "text-success" },
               { label: "Avg. Duration", value: "12m", color: "text-primary" }
             ]}
             actions={[
               { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default", onClick: () => { window.location.href = "/tutorial/record?title=New%20Tutorial"; } },
-              { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => openToast("Opening Library") }
+              { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => { window.location.href = "/tutorials"; } }
             ]}
           >
             <div className="mb-4 p-4 bg-muted/30 rounded-xl">

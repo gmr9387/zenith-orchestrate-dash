@@ -13,6 +13,7 @@ interface ToolCardProps {
   children?: ReactNode;
   className?: string;
   onOpen?: () => void;
+  onPreview?: () => void;
 }
 
 export function ToolCard({ 
@@ -24,7 +25,8 @@ export function ToolCard({
   actions = [],
   children,
   className = "",
-  onOpen
+  onOpen,
+  onPreview
 }: ToolCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   return (
@@ -59,7 +61,7 @@ export function ToolCard({
             <Button
               size="sm"
               className="w-full bg-white/20 border-white/30 text-white hover:bg-white/30 backdrop-blur-sm"
-              onClick={() => setPreviewOpen(true)}
+              onClick={() => (onPreview ? onPreview() : setPreviewOpen(true))}
             >
               <Play className="h-4 w-4 mr-2" />
               Quick Preview
