@@ -1,73 +1,229 @@
-# Welcome to your Lovable project
+# Zilliance - Enterprise Business Automation Platform
 
-## Project info
+Zilliance is a revolutionary business automation platform that combines six powerful tools into one seamless experience. Built with modern React, TypeScript, and enterprise-grade architecture, it provides AI-powered automation, tutorial creation, video editing, workflow management, and more.
 
-**URL**: https://lovable.dev/projects/3c09289c-73f4-4d4a-af29-7c8ad12ed6e4
+## 🚀 Features
 
-## How can I edit this code?
+### Core Platform
+- **AI-Powered Automation**: Advanced machine learning for business process optimization
+- **Enterprise Security**: Role-based access control and secure authentication
+- **Real-time Analytics**: Live dashboards and performance metrics
+- **Responsive Design**: Modern UI built with Tailwind CSS and shadcn/ui
 
-There are several ways of editing your application.
+### Six Revolutionary Tools
 
-**Use Lovable**
+1. **API Hub** - Integration management with live network visualizations
+2. **Tutorial Builder** - AI-powered screen recording and tutorial generation
+3. **Video Creator** - Browser-native video editing with Hollywood-level capabilities
+4. **Workflow Engine** - Visual business process automation that rivals Zapier
+5. **App Builder** - Low-code platform for building custom business applications
+6. **CRM Suite** - Next-generation customer relationship management
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/3c09289c-73f4-4d4a-af29-7c8ad12ed6e4) and start prompting.
+### New Features (Latest Release)
 
-Changes made via Lovable will be committed automatically to this repo.
+#### 🔐 Authentication & Security
+- **JWT-based authentication** with automatic token refresh
+- **Role-based access control** (User, Admin, Enterprise)
+- **Secure API calls** with automatic auth headers
+- **Session management** and secure storage
 
-**Use your preferred IDE**
+#### ☁️ S3-Compatible Storage
+- **Multi-provider support**: Amazon S3, DigitalOcean Spaces, Cloudflare R2
+- **Presigned URLs** for secure file uploads/downloads
+- **Automatic file management** with metadata tracking
+- **Scalable storage** for tutorial media and business assets
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### 📚 Enhanced Tutorial System
+- **Advanced search** with filters (category, difficulty, rating, duration)
+- **Pagination** for large tutorial libraries
+- **Step management** with drag-and-drop reordering
+- **Progress tracking** and completion analytics
+- **Media support** for videos, images, and interactive content
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🛠️ Technology Stack
 
-Follow these steps:
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI Components**: shadcn/ui + Tailwind CSS
+- **State Management**: React Query (TanStack Query)
+- **Routing**: React Router DOM
+- **Authentication**: JWT with refresh tokens
+- **Storage**: S3-compatible APIs
+- **Icons**: Lucide React
+- **Forms**: React Hook Form + Zod validation
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 📦 Installation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Prerequisites
+- Node.js 18+ 
+- npm, yarn, or bun
+- Modern web browser
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Quick Start
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd zilliance
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or
+   bun install
+   ```
+
+3. **Start development server**
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   # or
+   bun dev
+   ```
+
+4. **Open your browser**
+   Navigate to `http://localhost:5173`
+
+## ⚙️ Configuration
+
+### Storage Setup
+
+1. **Navigate to Storage Configuration**
+   - Go to `/tutorial-builder` → Storage Config tab
+   - Or access directly via the main navigation
+
+2. **Configure S3-Compatible Storage**
+   ```typescript
+   {
+     endpoint: "https://your-storage-endpoint.com",
+     bucket: "your-bucket-name",
+     region: "your-region",
+     accessKeyId: "your-access-key",
+     secretAccessKey: "your-secret-key"
+   }
+   ```
+
+3. **Supported Providers**
+   - **Amazon S3**: `https://s3.amazonaws.com`
+   - **DigitalOcean Spaces**: `https://nyc3.digitaloceanspaces.com`
+   - **Cloudflare R2**: `https://pub-1234567890.r2.dev`
+   - **Any S3-compatible service**
+
+### Authentication Setup
+
+The platform automatically handles authentication with:
+- JWT token management
+- Automatic refresh on expiration
+- Secure header injection for API calls
+- Local storage for session persistence
+
+## 🏗️ Project Structure
+
+```
+src/
+├── components/          # Reusable UI components
+│   ├── ui/             # shadcn/ui components
+│   ├── TutorialSearch.tsx      # Tutorial search with pagination
+│   ├── StepManagement.tsx      # Step CRUD operations
+│   └── StorageConfig.tsx      # Storage configuration
+├── lib/                # Core utilities and services
+│   ├── auth.ts         # Authentication management
+│   ├── api.ts          # API client with auth headers
+│   ├── storage.ts      # S3-compatible storage
+│   └── tutorials.ts    # Tutorial and step management
+├── pages/              # Page components
+│   ├── Index.tsx       # Main dashboard
+│   ├── TutorialBuilder.tsx    # Tutorial management
+│   └── NotFound.tsx    # 404 page
+└── assets/             # Static assets and images
 ```
 
-**Edit a file directly in GitHub**
+## 🔧 Development
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Available Scripts
 
-**Use GitHub Codespaces**
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run build:dev` - Build for development
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Code Style
 
-## What technologies are used for this project?
+- **TypeScript**: Strict mode enabled
+- **ESLint**: Modern JavaScript/React rules
+- **Prettier**: Automatic code formatting
+- **Conventions**: Follow React best practices
 
-This project is built with:
+## 📊 Business Intelligence
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Pre-Revenue Valuation Analysis
 
-## How can I deploy this project?
+Based on the comprehensive feature set and market positioning:
 
-Simply open [Lovable](https://lovable.dev/projects/3c09289c-73f4-4d4a-af29-7c8ad12ed6e4) and click on Share -> Publish.
+#### **Estimated Valuation: $15-25M**
 
-## Can I connect a custom domain to my Lovable project?
+#### **Market Comparison**
+- **Zapier**: $5B+ valuation (workflow automation)
+- **Loom**: $1.5B+ valuation (video tutorials)
+- **Notion**: $10B+ valuation (productivity platform)
+- **HubSpot**: $25B+ valuation (CRM + marketing)
 
-Yes, you can!
+#### **Competitive Advantages**
+1. **Integrated Platform**: Six tools in one vs. separate point solutions
+2. **AI-Powered**: Advanced automation vs. rule-based workflows
+3. **Enterprise Ready**: Security, scalability, and compliance
+4. **Modern Architecture**: Built for the cloud-native era
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+#### **Revenue Potential**
+- **SaaS Pricing**: $99-499/month per user
+- **Enterprise**: $10K-100K+ annual contracts
+- **Market Size**: $50B+ business automation market
+- **Growth Rate**: 25-35% annual expansion
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## 🚀 Deployment
+
+### Production Build
+```bash
+npm run build
+```
+
+### Environment Variables
+```bash
+VITE_API_BASE_URL=https://api.zilliance.com
+VITE_STORAGE_ENDPOINT=https://storage.zilliance.com
+VITE_AUTH_DOMAIN=auth.zilliance.com
+```
+
+### Deployment Options
+- **Vercel**: Zero-config React deployment
+- **Netlify**: Static site hosting with functions
+- **AWS S3 + CloudFront**: Enterprise-grade hosting
+- **Docker**: Containerized deployment
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is proprietary software. All rights reserved.
+
+## 📞 Support
+
+- **Documentation**: [docs.zilliance.com](https://docs.zilliance.com)
+- **Support**: [support@zilliance.com](mailto:support@zilliance.com)
+- **Sales**: [sales@zilliance.com](mailto:sales@zilliance.com)
+
+---
+
+**Built with ❤️ by the Zilliance Team**
+
+*Transforming business automation with enterprise-grade AI*

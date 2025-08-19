@@ -60,9 +60,13 @@ const Index = () => {
                 <Bell className="h-4 w-4" />
               </Button>
               
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
+                          <Button variant="outline" size="sm" asChild>
+              <a href="/tutorial-builder">Tutorial Builder</a>
+            </Button>
+            
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4" />
+            </Button>
             </div>
           </div>
         </div>
