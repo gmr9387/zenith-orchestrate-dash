@@ -25,11 +25,18 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
   
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingStep, setEditingStep] = useState<TutorialStep | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    description: string;
+    content: string;
+    type: 'text' | 'video' | 'interactive' | 'quiz';
+    order: number;
+    duration: number;
+  }>({
     title: '',
     description: '',
     content: '',
-    type: 'text' as const,
+    type: 'text',
     order: 0,
     duration: 0,
   });

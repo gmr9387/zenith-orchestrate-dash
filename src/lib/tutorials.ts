@@ -361,7 +361,12 @@ class TutorialManager {
         throw new Error(response.message || 'Failed to get tutorial progress');
       }
 
-      return response.data || {
+      return (response.data as {
+        completedSteps: number;
+        totalSteps: number;
+        percentage: number;
+        estimatedTimeRemaining: number;
+      }) || {
         completedSteps: 0,
         totalSteps: 0,
         percentage: 0,

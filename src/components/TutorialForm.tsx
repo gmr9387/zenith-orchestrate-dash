@@ -29,11 +29,20 @@ export const TutorialForm: React.FC<TutorialFormProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    description: string;
+    category: 'business' | 'technology' | 'marketing' | 'sales' | 'development' | 'design' | 'finance' | 'healthcare' | 'education' | 'other';
+    difficulty: 'beginner' | 'intermediate' | 'advanced';
+    estimatedDuration: number;
+    tags: string;
+    isPublished: boolean;
+    isPublic: boolean;
+  }>({
     title: '',
     description: '',
-    category: 'business' as const,
-    difficulty: 'beginner' as const,
+    category: 'business',
+    difficulty: 'beginner',
     estimatedDuration: 30,
     tags: '',
     isPublished: false,

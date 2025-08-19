@@ -12,6 +12,7 @@ interface Card3DProps {
   shadowIntensity?: number;
   glowColor?: string;
   hoverEffect?: 'lift' | 'glow' | 'morph' | 'all';
+  onClick?: () => void;
 }
 
 const Card3D: React.FC<Card3DProps> = ({
@@ -24,7 +25,8 @@ const Card3D: React.FC<Card3DProps> = ({
   perspective = 1000,
   shadowIntensity = 0.3,
   glowColor = '#3b82f6',
-  hoverEffect = 'all'
+  hoverEffect = 'all',
+  onClick
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -118,7 +120,7 @@ const Card3D: React.FC<Card3DProps> = ({
 
       {/* Main Card */}
       <motion.div
-        className={`relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden ${className}`}
+        className={`relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden cursor-pointer ${className}`}
         style={{
           perspective,
           transformStyle: 'preserve-3d',
@@ -129,6 +131,7 @@ const Card3D: React.FC<Card3DProps> = ({
             : '0 10px 30px rgba(0, 0, 0, 0.1)'
         }}
         transition={{ duration: 0.3 }}
+        onClick={onClick}
       >
         {/* 3D Transform Container */}
         <motion.div

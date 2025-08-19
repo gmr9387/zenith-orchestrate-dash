@@ -92,7 +92,15 @@ class S3StorageManager {
 
       return {
         success: true,
-        data: response.data,
+        data: {
+          key,
+          size: file.size,
+          contentType: file.type,
+          lastModified: new Date().toISOString(),
+          etag: (response.data as any)?.etag || '',
+          metadata: (response.data as any)?.metadata || {},
+          url: (response.data as any)?.url || ''
+        },
         message: 'File uploaded successfully',
       };
     } catch (error) {
