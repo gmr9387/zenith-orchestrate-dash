@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -11,6 +12,15 @@ import { sendEmail } from '../utils/email.js';
 import { sendSMS } from '../utils/sms.js';
 
 const router = express.Router();
+
+// Per-IP rate limit for auth-sensitive routes
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+router.use(authRateLimiter);
 
 // Validation rules
 const registerValidation = [
@@ -121,8 +131,14 @@ router.post('/register', registerValidation, asyncHandler(async (req, res) => {
   const accessToken = user.generateAuthToken();
   const refreshToken = user.generateRefreshToken();
 
-  // Store refresh token in Redis (in production)
-  // await redisClient.setex(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, refreshToken);
+  // Store refresh token in Redis (allowlist)
+  if (req.app.locals.redisClient) {
+    try {
+      await req.app.locals.redisClient.setEx(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, refreshToken);
+    } catch (e) {
+      logger.warn('Failed to store refresh token in Redis', { userId: user._id, error: e?.message });
+    }
+  }
 
   res.status(201).json({
     success: true,
@@ -197,8 +213,14 @@ router.post('/login', loginValidation, asyncHandler(async (req, res) => {
   const accessToken = user.generateAuthToken();
   const refreshToken = user.generateRefreshToken();
 
-  // Store refresh token in Redis (in production)
-  // await redisClient.setex(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, refreshToken);
+  // Store refresh token in Redis (allowlist)
+  if (req.app.locals.redisClient) {
+    try {
+      await req.app.locals.redisClient.setEx(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, refreshToken);
+    } catch (e) {
+      logger.warn('Failed to store refresh token in Redis', { userId: user._id, error: e?.message });
+    }
+  }
 
   // Log successful login
   logger.info('User logged in successfully', {
@@ -259,12 +281,26 @@ router.post('/refresh', asyncHandler(async (req, res) => {
       throw new ApiError(401, 'User not found or inactive');
     }
 
+    // Verify old refresh token is allowlisted
+    if (req.app.locals.redisClient) {
+      const stored = await req.app.locals.redisClient.get(`refresh_token:${user._id}`);
+      if (stored !== refresh_token) {
+        throw new ApiError(401, 'Refresh token not recognized');
+      }
+    }
+
     // Generate new tokens
     const accessToken = user.generateAuthToken();
     const newRefreshToken = user.generateRefreshToken();
 
-    // Store new refresh token in Redis (in production)
-    // await redisClient.setex(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, newRefreshToken);
+    // Rotate refresh token in Redis
+    if (req.app.locals.redisClient) {
+      try {
+        await req.app.locals.redisClient.setEx(`refresh_token:${user._id}`, 7 * 24 * 60 * 60, newRefreshToken);
+      } catch (e) {
+        logger.warn('Failed to rotate refresh token in Redis', { userId: user._id, error: e?.message });
+      }
+    }
 
     res.json({
       success: true,
@@ -498,8 +534,14 @@ router.post('/resend-verification', passwordResetValidation, asyncHandler(async 
 // @desc    Logout user (invalidate refresh token)
 // @access  Private
 router.post('/logout', authenticateToken, asyncHandler(async (req, res) => {
-  // In production, you would invalidate the refresh token in Redis
-  // await redisClient.del(`refresh_token:${req.user._id}`);
+  // Invalidate the refresh token in Redis
+  if (req.app.locals.redisClient) {
+    try {
+      await req.app.locals.redisClient.del(`refresh_token:${req.user._id}`);
+    } catch (e) {
+      logger.warn('Failed to delete refresh token in Redis on logout', { userId: req.user._id, error: e?.message });
+    }
+  }
 
   logger.info('User logged out', {
     userId: req.user._id,

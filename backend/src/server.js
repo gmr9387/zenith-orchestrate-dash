@@ -38,6 +38,8 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // Connect to databases
 await connectDB();
 const redisClient = await connectRedis();
+// Expose Redis client to routes via app.locals
+app.locals.redisClient = redisClient;
 
 // Security middleware
 app.use(helmet({

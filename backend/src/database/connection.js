@@ -9,10 +9,6 @@ export const connectDB = async () => {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
-      bufferMaxEntries: 0,
-      bufferCommands: false,
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
     });
 
     logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);

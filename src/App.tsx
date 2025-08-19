@@ -21,6 +21,7 @@ import TutorialRecord from './pages/TutorialRecord';
 import Tutorials from './pages/Tutorials';
 import TutorialAuto from './pages/TutorialAuto';
 import TutorialView from './pages/TutorialView';
+import VerifyEmail from './pages/VerifyEmail';
 import './styles/animations.css';
 
 // Create a client
@@ -186,6 +187,11 @@ function App() {
             <Route path="/reset-password" element={
               <PublicRoute>
                 <ResetPassword />
+              </PublicRoute>
+            } />
+            <Route path="/verify-email" element={
+              <PublicRoute>
+                <VerifyEmail />
               </PublicRoute>
             } />
 
