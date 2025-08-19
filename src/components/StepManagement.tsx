@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, Play, FileText, CheckCircle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { tutorialManager, TutorialStep, StepSearchParams } from '@/lib/tutorials';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { tutorialManager, TutorialStep, StepSearchParams } from '../lib/tutorials';
 
 interface StepManagementProps {
-  tutorialId: string;
+  tutorialId?: string;
   onStepUpdate?: () => void;
   className?: string;
 }
@@ -18,7 +18,7 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<StepSearchParams>({
-    tutorialId,
+    tutorialId: tutorialId || '',
     page: 1,
     limit: 20,
   });
@@ -37,18 +37,27 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
   const loadSteps = async () => {
     setIsLoading(true);
     try {
+      // For now, we'll show a message that steps need a tutorial context
+      if (!tutorialId) {
+        setSteps([]);
+        return;
+      }
+      
       const response = await tutorialManager.searchSteps(searchParams);
-      setSteps(response.data);
+      setSteps(response.data || []);
     } catch (error) {
       console.error('Failed to load steps:', error);
+      setSteps([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSteps();
-  }, [searchParams]);
+    if (tutorialId) {
+      loadSteps();
+    }
+  }, [searchParams, tutorialId]);
 
   const handleSearch = (query: string) => {
     setSearchParams(prev => ({ ...prev, query, page: 1 }));
@@ -75,10 +84,14 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
   };
 
   const handleCreateStep = async () => {
+    if (!tutorialId) {
+      alert('Please select a tutorial first');
+      return;
+    }
+    
     try {
-      await tutorialManager.createStep({
+      await tutorialManager.createStep(tutorialId, {
         ...formData,
-        tutorialId,
         isCompleted: false,
       });
       
@@ -88,14 +101,15 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
       onStepUpdate?.();
     } catch (error) {
       console.error('Failed to create step:', error);
+      alert('Failed to create step. Please try again.');
     }
   };
 
   const handleUpdateStep = async () => {
-    if (!editingStep) return;
+    if (!editingStep || !tutorialId) return;
     
     try {
-      await tutorialManager.updateStep(editingStep.id, formData);
+      await tutorialManager.updateStep(tutorialId, editingStep._id!, formData);
       
       setEditingStep(null);
       resetForm();
@@ -103,18 +117,22 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
       onStepUpdate?.();
     } catch (error) {
       console.error('Failed to update step:', error);
+      alert('Failed to update step. Please try again.');
     }
   };
 
   const handleDeleteStep = async (stepId: string) => {
+    if (!tutorialId) return;
+    
     if (!confirm('Are you sure you want to delete this step?')) return;
     
     try {
-      await tutorialManager.deleteStep(stepId);
+      await tutorialManager.deleteStep(tutorialId, stepId);
       loadSteps();
       onStepUpdate?.();
     } catch (error) {
       console.error('Failed to delete step:', error);
+      alert('Failed to delete step. Please try again.');
     }
   };
 
@@ -122,7 +140,7 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
     setEditingStep(step);
     setFormData({
       title: step.title,
-      description: step.description,
+      description: step.description || '',
       content: step.content,
       type: step.type,
       order: step.order,
@@ -131,7 +149,7 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
   };
 
   const renderStepCard = (step: TutorialStep) => (
-    <div key={step.id} className="bg-card border border-border rounded-lg p-4">
+    <div key={step._id} className="bg-card border border-border rounded-lg p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
@@ -156,7 +174,7 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleDeleteStep(step.id)}
+            onClick={() => handleDeleteStep(step._id!)}
             className="text-destructive hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
@@ -208,6 +226,25 @@ export const StepManagement = ({ tutorialId, onStepUpdate, className = '' }: Ste
       </div>
     );
   };
+
+  if (!tutorialId) {
+    return (
+      <div className={`space-y-6 ${className}`}>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold mb-2">Tutorial Steps</h2>
+          <p className="text-muted-foreground mb-4">
+            Select a tutorial to manage its steps
+          </p>
+          <div className="bg-muted/30 border border-border rounded-lg p-8">
+            <p className="text-sm text-muted-foreground">
+              Steps can only be managed within the context of a specific tutorial. 
+              Please select a tutorial from the Tutorials tab to get started.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-6 ${className}`}>

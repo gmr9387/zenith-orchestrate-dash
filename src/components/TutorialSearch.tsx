@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, ChevronLeft, ChevronRight, Play, Clock, Star, Eye } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { tutorialManager, TutorialSearchParams, TutorialSearchResponse, Tutorial } from '@/lib/tutorials';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Checkbox } from './ui/checkbox';
+import { tutorialManager, TutorialSearchParams, TutorialSearchResponse, Tutorial } from '../lib/tutorials';
 
 interface TutorialSearchProps {
   onTutorialSelect?: (tutorial: Tutorial) => void;
@@ -60,7 +60,7 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
 
   const renderTutorialCard = (tutorial: Tutorial) => (
     <div
-      key={tutorial.id}
+      key={tutorial._id}
       className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
       onClick={() => handleTutorialClick(tutorial)}
     >
@@ -95,11 +95,11 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
         </div>
         <div className="flex items-center gap-1">
           <Star className="h-3 w-3 fill-current" />
-          <span>{tutorial.rating.toFixed(1)}</span>
+          <span>{tutorial.rating?.average?.toFixed(1) || '0.0'}</span>
         </div>
         <div className="flex items-center gap-1">
           <Eye className="h-3 w-3" />
-          <span>{tutorial.viewCount}</span>
+          <span>{tutorial.viewCount || 0}</span>
         </div>
       </div>
     </div>

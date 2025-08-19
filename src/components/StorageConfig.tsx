@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Save, TestTube, Cloud, CheckCircle, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { storageManager, StorageConfig } from '@/lib/storage';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Alert, AlertDescription } from './ui/alert';
+import { storageManager, StorageConfig as StorageConfigType } from '../lib/storage';
 
 export const StorageConfig = () => {
-  const [config, setConfig] = useState<StorageConfig>({
+  const [config, setConfig] = useState<StorageConfigType>({
+    provider: 's3',
     endpoint: '',
     bucket: '',
     region: '',
@@ -42,7 +43,7 @@ export const StorageConfig = () => {
     loadConfig();
   }, []);
 
-  const handleInputChange = (key: keyof StorageConfig, value: string) => {
+  const handleInputChange = (key: keyof StorageConfigType, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
@@ -137,6 +138,24 @@ export const StorageConfig = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="provider">Storage Provider</Label>
+              <select
+                id="provider"
+                value={config.provider}
+                onChange={(e) => handleInputChange('provider', e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              >
+                <option value="s3">Amazon S3</option>
+                <option value="minio">MinIO</option>
+                <option value="digitalocean">DigitalOcean Spaces</option>
+                <option value="cloudflare">Cloudflare R2</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Select your storage service provider
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="endpoint">Storage Endpoint</Label>
               <Input
@@ -265,6 +284,13 @@ export const StorageConfig = () => {
             
             {isConfigured && (
               <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Provider</span>
+                  <span className="text-sm text-muted-foreground font-mono capitalize">
+                    {config.provider}
+                  </span>
+                </div>
+                
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Endpoint</span>
                   <span className="text-sm text-muted-foreground font-mono">
