@@ -27,6 +27,8 @@ const Index = () => {
     <div className="min-h-screen mesh-bg">
       {/* Revolutionary Navigation System */}
       <AdaptiveNavigation />
+      
+      <header>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
