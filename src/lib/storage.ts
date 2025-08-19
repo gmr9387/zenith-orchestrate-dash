@@ -1,6 +1,7 @@
-import { apiClient } from './api';
+import { apiClient, ApiResponse } from './api';
 
 export interface StorageConfig {
+  provider: 's3' | 'minio' | 'digitalocean' | 'cloudflare';
   endpoint: string;
   bucket: string;
   region: string;
@@ -12,9 +13,10 @@ export interface FileMetadata {
   key: string;
   size: number;
   contentType: string;
-  lastModified: Date;
+  lastModified: string;
   etag: string;
-  url?: string;
+  metadata: Record<string, any>;
+  url: string;
 }
 
 export interface UploadProgress {
@@ -26,7 +28,7 @@ export interface UploadProgress {
 export interface StorageResponse<T = any> {
   success: boolean;
   data: T;
-  message?: string;
+  message: string;
 }
 
 class S3StorageManager {
@@ -34,194 +36,211 @@ class S3StorageManager {
   private isInitialized: boolean = false;
 
   async initialize(config: StorageConfig): Promise<void> {
-    this.config = config;
-    
-    // Test connection
     try {
+      this.config = config;
+      
+      // Test connection to storage service
       await this.testConnection();
+      
       this.isInitialized = true;
+      console.log('Storage manager initialized successfully');
     } catch (error) {
-      throw new Error(`Failed to initialize S3 storage: ${error}`);
+      console.error('Failed to initialize storage manager:', error);
+      throw error;
     }
   }
 
   private async testConnection(): Promise<void> {
-    if (!this.config) throw new Error('Storage not initialized');
-    
     try {
-      await apiClient.get('/storage/test-connection', {
-        endpoint: this.config.endpoint,
-        bucket: this.config.bucket,
-        region: this.config.region,
-      });
+      const response = await apiClient.post('/storage/test-connection');
+      if (!response.success) {
+        throw new Error(response.message || 'Connection test failed');
+      }
     } catch (error) {
-      throw new Error('Failed to connect to S3-compatible storage');
+      console.error('Storage connection test failed:', error);
+      throw new Error('Storage connection test failed');
     }
   }
 
   async uploadFile(
-    file: File,
-    key: string,
+    file: File, 
+    key: string, 
     onProgress?: (progress: UploadProgress) => void
   ): Promise<StorageResponse<FileMetadata>> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      // Create presigned URL for upload
-      const presignedResponse = await apiClient.post('/storage/presigned-url', {
-        key,
-        contentType: file.type,
-        operation: 'putObject',
-      });
-
-      const { uploadUrl } = presignedResponse.data;
-
-      // Upload file using presigned URL
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Upload failed');
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
       }
 
-      // Get file metadata
-      const metadata = await this.getFileMetadata(key);
+      // Upload file using the backend API
+      const response = await apiClient.uploadFile('/storage/upload', file, {
+        folder: key.split('/').slice(0, -1).join('/'),
+        publicRead: false,
+        processImage: file.type.startsWith('image/'),
+        processVideo: file.type.startsWith('video/'),
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'Upload failed');
+      }
+
+      // Simulate progress for small files
+      if (onProgress) {
+        onProgress({ loaded: file.size, total: file.size, percentage: 100 });
+      }
 
       return {
         success: true,
-        data: metadata,
+        data: response.data,
         message: 'File uploaded successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        data: null as any,
-        message: `Upload failed: ${error}`,
-      };
+      console.error('File upload failed:', error);
+      throw error;
     }
   }
 
   async downloadFile(key: string): Promise<Blob> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      // Create presigned URL for download
-      const presignedResponse = await apiClient.post('/storage/presigned-url', {
-        key,
-        operation: 'getObject',
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      // Get file metadata first
+      const metadataResponse = await apiClient.get<FileMetadata>(`/storage/files/${key}`);
+      if (!metadataResponse.success) {
+        throw new Error('Failed to get file metadata');
+      }
+
+      // Download file using the backend API
+      const response = await fetch(`${apiClient['baseURL']}/storage/files/${key}/download`, {
+        headers: {
+          ...authManager.getAuthHeaders(),
+        },
       });
 
-      const { downloadUrl } = presignedResponse.data;
-
-      // Download file using presigned URL
-      const response = await fetch(downloadUrl);
       if (!response.ok) {
         throw new Error('Download failed');
       }
 
       return await response.blob();
     } catch (error) {
-      throw new Error(`Download failed: ${error}`);
+      console.error('File download failed:', error);
+      throw error;
     }
   }
 
   async deleteFile(key: string): Promise<StorageResponse<boolean>> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      await apiClient.delete(`/storage/files/${encodeURIComponent(key)}`);
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      const response = await apiClient.delete(`/storage/files/${key}`);
       
+      if (!response.success) {
+        throw new Error(response.message || 'Delete failed');
+      }
+
       return {
         success: true,
         data: true,
         message: 'File deleted successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        data: false,
-        message: `Delete failed: ${error}`,
-      };
+      console.error('File deletion failed:', error);
+      throw error;
     }
   }
 
-  async listFiles(
-    prefix?: string,
-    maxKeys: number = 1000
-  ): Promise<StorageResponse<FileMetadata[]>> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
+  async listFiles(prefix?: string, maxKeys: number = 1000): Promise<StorageResponse<FileMetadata[]>> {
     try {
-      const response = await apiClient.get('/storage/files', {
-        prefix,
-        maxKeys,
-      });
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      const params: Record<string, any> = { maxKeys };
+      if (prefix) {
+        params.prefix = prefix;
+      }
+
+      const response = await apiClient.get<{ files: FileMetadata[] }>('/storage/files', params);
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to list files');
+      }
 
       return {
         success: true,
-        data: response.data.files.map((file: any) => ({
-          ...file,
-          lastModified: new Date(file.lastModified),
-        })),
+        data: response.data.files,
         message: 'Files listed successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        data: [],
-        message: `List files failed: ${error}`,
-      };
+      console.error('Failed to list files:', error);
+      throw error;
     }
   }
 
   async getFileMetadata(key: string): Promise<FileMetadata> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      const response = await apiClient.get(`/storage/files/${encodeURIComponent(key)}/metadata`);
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      const response = await apiClient.get<FileMetadata>(`/storage/files/${key}`);
       
-      return {
-        ...response.data,
-        lastModified: new Date(response.data.lastModified),
-      };
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to get file metadata');
+      }
+
+      return response.data;
     } catch (error) {
-      throw new Error(`Failed to get file metadata: ${error}`);
+      console.error('Failed to get file metadata:', error);
+      throw error;
     }
   }
 
   async generatePresignedUrl(
-    key: string,
-    operation: 'getObject' | 'putObject',
+    key: string, 
+    operation: 'getObject' | 'putObject', 
     expiresIn: number = 3600
   ): Promise<string> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      const response = await apiClient.post('/storage/presigned-url', {
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      const response = await apiClient.post<{ url: string }>('/storage/presigned-url', {
         key,
         operation,
         expiresIn,
       });
 
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to generate presigned URL');
+      }
+
       return response.data.url;
     } catch (error) {
-      throw new Error(`Failed to generate presigned URL: ${error}`);
+      console.error('Failed to generate presigned URL:', error);
+      throw error;
     }
   }
 
   async copyFile(sourceKey: string, destinationKey: string): Promise<StorageResponse<FileMetadata>> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      const response = await apiClient.post('/storage/copy', {
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
+      }
+
+      const response = await apiClient.post<FileMetadata>('/storage/copy', {
         sourceKey,
         destinationKey,
       });
+
+      if (!response.success) {
+        throw new Error(response.message || 'Copy failed');
+      }
 
       return {
         success: true,
@@ -229,52 +248,82 @@ class S3StorageManager {
         message: 'File copied successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        data: null as any,
-        message: `Copy failed: ${error}`,
-      };
+      console.error('File copy failed:', error);
+      throw error;
     }
   }
 
   async moveFile(sourceKey: string, destinationKey: string): Promise<StorageResponse<FileMetadata>> {
-    if (!this.isInitialized) throw new Error('Storage not initialized');
-    
     try {
-      // Copy file to new location
-      const copyResult = await this.copyFile(sourceKey, destinationKey);
-      if (!copyResult.success) {
-        throw new Error('Copy failed');
+      if (!this.isInitialized) {
+        throw new Error('Storage manager not initialized');
       }
 
-      // Delete original file
-      const deleteResult = await this.deleteFile(sourceKey);
-      if (!deleteResult.success) {
-        throw new Error('Delete original failed');
+      const response = await apiClient.post<FileMetadata>('/storage/move', {
+        sourceKey,
+        destinationKey,
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'Move failed');
       }
 
       return {
         success: true,
-        data: copyResult.data,
+        data: response.data,
         message: 'File moved successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        data: null as any,
-        message: `Move failed: ${error}`,
-      };
+      console.error('File move failed:', error);
+      throw error;
     }
   }
 
   getFileUrl(key: string): string {
-    if (!this.config) throw new Error('Storage not initialized');
-    
+    if (!this.config) {
+      throw new Error('Storage manager not configured');
+    }
+
+    // For MinIO and other S3-compatible services
+    if (this.config.provider === 'minio') {
+      return `${this.config.endpoint}/${this.config.bucket}/${key}`;
+    }
+
+    // For AWS S3 and other cloud providers
     return `${this.config.endpoint}/${this.config.bucket}/${key}`;
   }
 
   isReady(): boolean {
     return this.isInitialized;
+  }
+
+  getStatus(): StorageConfig | null {
+    return this.config;
+  }
+
+  // Get storage usage statistics
+  async getUsage(): Promise<any> {
+    try {
+      const response = await apiClient.get('/storage/usage');
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to get usage statistics');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get usage statistics:', error);
+      throw error;
+    }
+  }
+
+  // Test storage connection
+  async testConnection(): Promise<boolean> {
+    try {
+      const response = await apiClient.post('/storage/test-connection');
+      return response.success;
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      return false;
+    }
   }
 }
 
