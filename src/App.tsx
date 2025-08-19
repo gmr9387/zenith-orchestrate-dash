@@ -2,6 +2,9 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 import { authManager } from './lib/auth';
 import Index from './pages/Index';
 import Login from './pages/Login';
@@ -13,6 +16,11 @@ import UserProfile from './pages/UserProfile';
 import DashboardLayout from './components/DashboardLayout';
 import HeroSection from './components/HeroSection';
 import EnhancedNavigation from './components/EnhancedNavigation';
+import NotFound from './pages/NotFound';
+import TutorialRecord from './pages/TutorialRecord';
+import Tutorials from './pages/Tutorials';
+import TutorialAuto from './pages/TutorialAuto';
+import TutorialView from './pages/TutorialView';
 import './styles/animations.css';
 
 // Create a client
@@ -27,7 +35,8 @@ const queryClient = new QueryClient({
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isAuthenticated = authManager.isAuthenticated();
+  const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
+  const isAuthenticated = demoModeEnabled || authManager.isAuthenticated();
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -152,60 +161,92 @@ const LandingPage: React.FC = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          {/* Landing Page Route */}
-          <Route path="/landing" element={<LandingPage />} />
-          
-          {/* Public Routes */}
-          <Route path="/login" element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          } />
-          <Route path="/register" element={
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          } />
-          <Route path="/forgot-password" element={
-            <PublicRoute>
-              <ForgotPassword />
-            </PublicRoute>
-          } />
-          <Route path="/reset-password" element={
-            <PublicRoute>
-              <ResetPassword />
-            </PublicRoute>
-          } />
-          
-          {/* Protected Routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Index />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/tutorial-builder" element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <TutorialBuilder />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <UserProfile />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } />
-          
-          {/* Catch-all route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Landing Page Route */}
+            <Route path="/landing" element={<LandingPage />} />
+
+            {/* Public Routes */}
+            <Route path="/login" element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } />
+            <Route path="/register" element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            } />
+            <Route path="/forgot-password" element={
+              <PublicRoute>
+                <ForgotPassword />
+              </PublicRoute>
+            } />
+            <Route path="/reset-password" element={
+              <PublicRoute>
+                <ResetPassword />
+              </PublicRoute>
+            } />
+
+            {/* Protected Routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Index />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tutorial-builder" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TutorialBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <UserProfile />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tutorial/record" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TutorialRecord />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tutorials" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Tutorials />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tutorial/auto" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TutorialAuto />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tutorial/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TutorialView />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+        <Toaster />
+        <Sonner />
+      </TooltipProvider>
       
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

@@ -1,4 +1,5 @@
 import { Bell, CheckCircle, Clock, Zap } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 const activities = [
   {
@@ -52,10 +53,13 @@ export function ActivityFeed() {
 
       <div className="space-y-4">
         {activities.map((activity, index) => (
-          <div 
-            key={activity.id} 
-            className="flex items-start gap-4 p-4 rounded-xl hover:bg-muted/30 transition-all duration-300 animate-slide-up"
+          <div
+            key={activity.id}
+            className="flex items-start gap-4 p-4 rounded-xl hover:bg-muted/30 transition-all duration-300 animate-slide-up cursor-pointer"
             style={{ animationDelay: `${index * 0.1}s` }}
+            onClick={() => toast(activity.title, { description: activity.description })}
+            role="button"
+            tabIndex={0}
           >
             <div className="flex-shrink-0 p-2 rounded-lg bg-primary/10">
               <activity.icon className="h-5 w-5 text-primary" />
