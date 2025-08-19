@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound";
 import TutorialRecord from "./pages/TutorialRecord";
 import TutorialView from "./pages/TutorialView";
 import Tutorials from "./pages/Tutorials";
+import TutorialAuto from "./pages/TutorialAuto";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/tutorial/record" element={<TutorialRecord />} />
           <Route path="/tutorials" element={<Tutorials />} />
+          <Route path="/tutorial/auto" element={<TutorialAuto />} />
           <Route path="/tutorial/:id" element={<TutorialView />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

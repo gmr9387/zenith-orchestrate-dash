@@ -131,6 +131,7 @@ const Index = () => {
             ]}
             actions={[
               { label: "Generate Tutorial", icon: <Play className="h-4 w-4" />, variant: "default", onClick: () => { window.location.href = "/tutorial/record?title=New%20Tutorial"; } },
+              { label: "Auto Generate", icon: <Zap className="h-4 w-4" />, variant: "outline", onClick: () => { window.location.href = "/tutorial/auto"; } },
               { label: "View Library", icon: <ExternalLink className="h-4 w-4" />, variant: "outline", onClick: () => { window.location.href = "/tutorials"; } }
             ]}
           >
