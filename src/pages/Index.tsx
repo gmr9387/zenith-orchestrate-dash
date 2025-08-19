@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { ActivityFeed } from '@/components/ActivityFeed';
 import { ToolCard } from '@/components/ToolCard';
 import { toast } from '@/components/ui/sonner';
 import { NetworkVisualization } from '@/components/NetworkVisualization';
+import { apiClient } from '@/lib/api';
 
 // Import hero images
 import apiHubHero from '@/assets/api-hub-hero.jpg';
@@ -25,7 +26,86 @@ import crmSuiteHero from '@/assets/crm-suite-hero.jpg';
 
 const Index: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [tutorials, setTutorials] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load tutorials from backend
+  useEffect(() => {
+    loadTutorials();
+  }, []);
+
+  const loadTutorials = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/tutorials');
+      if (response.success) {
+        setTutorials(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load tutorials:', error);
+      toast('Failed to load tutorials', { description: 'Please try again later' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createTutorial = async (title: string, description: string) => {
+    try {
+      setLoading(true);
+      
+      // Create tutorial in local Dexie DB
+      const { db } = await import('@/lib/db');
+      const tutorialId = `tutorial_${Date.now()}`;
+      
+      await db.tutorials.add({
+        id: tutorialId,
+        title,
+        description,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        stepCount: 0,
+      });
+
+      // Also create in backend (mock for now)
+      const response = await apiClient.post('/tutorials', {
+        title,
+        description,
+        type: 'manual',
+      });
+
+      if (response.success) {
+        toast('Tutorial Created!', { description: `${title} has been created successfully` });
+        loadTutorials(); // Reload the list
+        return tutorialId;
+      }
+    } catch (error) {
+      console.error('Failed to create tutorial:', error);
+      toast('Failed to create tutorial', { description: 'Please try again later' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openToast = (title: string, description?: string) => toast(title, { description });
+
+  const handleCreateTutorial = async () => {
+    const title = prompt('Enter tutorial title:');
+    if (title) {
+      const description = prompt('Enter tutorial description:') || 'A new tutorial';
+      await createTutorial(title, description);
+    }
+  };
+
+  const handleQuickTutorial = async () => {
+    const quickTutorials = [
+      { title: 'Getting Started with Zilliance', description: 'Learn the basics of our platform' },
+      { title: 'Creating Your First Tutorial', description: 'Step-by-step guide to tutorial creation' },
+      { title: 'Advanced Features Overview', description: 'Master advanced platform capabilities' },
+    ];
+    
+    const randomTutorial = quickTutorials[Math.floor(Math.random() * quickTutorials.length)];
+    await createTutorial(randomTutorial.title, randomTutorial.description);
+  };
 
   return (
     <>
@@ -47,9 +127,9 @@ const Index: React.FC = () => {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
+            <div className="text-2xl font-bold">{tutorials.length}</div>
             <p className="text-xs text-muted-foreground">
-              +2 from last month
+              {loading ? 'Loading...' : `${tutorials.length} tutorials available`}
             </p>
           </CardContent>
         </Card>
@@ -107,18 +187,33 @@ const Index: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Link to="/tutorial-builder">
-              <Button className="w-full justify-start" variant="outline">
-                <BookOpen className="mr-2 h-4 w-4" />
-                Create New Tutorial
-              </Button>
-            </Link>
+            <Button 
+              className="w-full justify-start" 
+              variant="outline"
+              onClick={handleCreateTutorial}
+              disabled={loading}
+            >
+              <BookOpen className="mr-2 h-4 w-4" />
+              {loading ? 'Creating...' : 'Create New Tutorial'}
+            </Button>
+            
+            <Button 
+              className="w-full justify-start" 
+              variant="outline"
+              onClick={handleQuickTutorial}
+              disabled={loading}
+            >
+              <Zap className="mr-2 h-4 w-4" />
+              {loading ? 'Creating...' : 'Quick Tutorial'}
+            </Button>
+            
             <Link to="/tutorials">
               <Button className="w-full justify-start" variant="outline">
                 <Search className="mr-2 h-4 w-4" />
                 Browse Tutorials
               </Button>
             </Link>
+            
             <Button className="w-full justify-start" variant="outline">
               <Filter className="mr-2 h-4 w-4" />
               Manage Content
@@ -135,27 +230,21 @@ const Index: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">
-                  Tutorial "Getting Started with React" published
-                </span>
-                <span className="text-xs text-gray-400 ml-auto">2h ago</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">
-                  New user registration: john.doe@example.com
-                </span>
-                <span className="text-xs text-gray-400 ml-auto">4h ago</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">
-                  Storage usage alert: 85% of quota used
-                </span>
-                <span className="text-xs text-gray-400 ml-auto">6h ago</span>
-              </div>
+              {tutorials.length > 0 ? (
+                tutorials.slice(0, 3).map((tutorial: any) => (
+                  <div key={tutorial.id} className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600">
+                      Tutorial "{tutorial.title}" created
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">Just now</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 text-center py-4">
+                  No tutorials yet. Create your first one!
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -198,7 +287,7 @@ const Index: React.FC = () => {
             else window.location.href = '/tutorial/record';
           }}
           metrics={[
-            { label: 'Tutorials Created', value: '1,847', color: 'text-success' },
+            { label: 'Tutorials Created', value: tutorials.length.toString(), color: 'text-success' },
             { label: 'Avg. Duration', value: '12m', color: 'text-primary' },
           ]}
           actions={[
@@ -301,10 +390,30 @@ const Index: React.FC = () => {
             <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
               <Zap className="h-6 w-6 text-primary" />
             </div>
+            <h3 className="font-semibold mb-2">Smart Automation</h3>
+            <p className="text-sm text-muted-foreground">AI-powered workflow suggestions</p>
           </div>
 
+          <div className="text-center p-6 rounded-xl bg-muted/30 hover-lift">
+            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <Share className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="font-semibold mb-2">Seamless Integration</h3>
+            <p className="text-sm text-muted-foreground">All tools work together</p>
+          </div>
+
+          <div className="text-center p-6 rounded-xl bg-muted/30 hover-lift">
+            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <TrendingUp className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="font-semibold mb-2">Performance Insights</h3>
+            <p className="text-sm text-muted-foreground">Real-time analytics & optimization</p>
+          </div>
+        </div>
+
+        <div className="text-center mt-8">
           <Link to="/tutorial-builder">
-            <Button>
+            <Button size="lg">
               <BookOpen className="mr-2 h-4 w-4" />
               Open Tutorial Builder
             </Button>

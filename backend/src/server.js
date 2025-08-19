@@ -2,9 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
-import session from 'express-session';
-import RedisStore from 'connect-redis';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,75 +10,51 @@ import { fileURLToPath } from 'url';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
 import { logger } from './utils/logger.js';
-import { connectDB } from './database/connection.js';
-import { connectRedis } from './database/redis.js';
-import { createSecurityHeaders, createCORSConfig } from './middleware/security/helmet.js';
-import { createIPRateLimiter, createAccountRateLimiter } from './middleware/security/rateLimiter.js';
-
-// Import routes
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
-import tutorialRoutes from './routes/tutorials.js';
-import storageRoutes from './routes/storage.js';
-import analyticsRoutes from './routes/analytics.js';
-import webhookRoutes from './routes/webhooks.js';
 
 // Load environment variables
 dotenv.config();
 
+// ES Module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__dirname);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Connect to databases
-await connectDB();
-const redisClient = await connectRedis();
+// In-memory storage for development (replace with database later)
+const tutorials = [
+  {
+    id: 'tutorial_1',
+    title: 'Getting Started with Zilliance',
+    description: 'Learn the basics of our platform',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tutorial_2',
+    title: 'Advanced Features',
+    description: 'Master advanced platform capabilities',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
 
-// Expose Redis client to routes via app.locals
-app.locals.redisClient = redisClient;
-
-// Security middleware
-app.use(createSecurityHeaders({
-  enableCSP: NODE_ENV === 'production',
-  enableHSTS: NODE_ENV === 'production',
-}));
+// Basic security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
 
 // CORS configuration
-app.use(cors(createCORSConfig({
+app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
-
-// Global rate limiting
-const globalLimiter = createIPRateLimiter(redisClient, {
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-});
-
-app.use('/api/', globalLimiter);
-
-// Session configuration with Redis (if needed for future features)
-if (redisClient) {
-  app.use(session({
-    store: new RedisStore({ client: redisClient }),
-    secret: process.env.AUTH_SESSION_SECRET || 'fallback-secret',
-    name: 'zilliance.sid',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.AUTH_COOKIE_SECURE === 'true',
-      httpOnly: true,
-      maxAge: parseInt(process.env.SESSION_TIMEOUT) || 24 * 60 * 60 * 1000,
-      domain: process.env.AUTH_COOKIE_DOMAIN || 'localhost',
-      sameSite: 'lax',
-    },
-  }));
-}
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -106,45 +79,94 @@ if (NODE_ENV === 'development') {
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 }
 
-// Health check endpoint with detailed status
-app.get('/health', async (req, res) => {
-  try {
-    const dbStatus = await import('./database/connection.js').then(m => m.getDBStatus());
-    const redisStatus = redisClient ? await import('./database/redis.js').then(m => m.redisHealthCheck(redisClient)) : { status: 'not_configured' };
-    
-    res.status(200).json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: NODE_ENV,
-      version: process.env.npm_package_version || '1.0.0',
-      services: {
-        database: dbStatus,
-        redis: redisStatus,
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0',
+    services: {
+      database: 'development_mode',
+      redis: 'development_mode',
+    },
+    message: 'Backend running in development mode without external databases',
+  });
+});
+
+// Simple test endpoint
+app.get('/api/v1/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Backend is working!',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Mock auth endpoint for testing
+app.post('/api/v1/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  
+  if (email && password) {
+    res.json({
+      success: true,
+      message: 'Login successful (mock)',
+      user: {
+        id: 'mock_user_123',
+        email: email,
+        role: 'user',
+        firstName: 'Mock',
+        lastName: 'User',
       },
-      memory: {
-        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-        external: Math.round(process.memoryUsage().external / 1024 / 1024),
-      },
+      token: 'mock_jwt_token_' + Date.now(),
     });
-  } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'ERROR',
-      timestamp: new Date().toISOString(),
-      error: error.message,
+  } else {
+    res.status(400).json({
+      success: false,
+      message: 'Email and password required',
     });
   }
 });
 
-// API routes with account-level rate limiting for authenticated endpoints
-app.use(`/api/${process.env.API_VERSION || 'v1'}/auth`, authRoutes);
-app.use(`/api/${process.env.API_VERSION || 'v1'}/users`, createAccountRateLimiter(redisClient), userRoutes);
-app.use(`/api/${process.env.API_VERSION || 'v1'}/tutorials`, createAccountRateLimiter(redisClient), tutorialRoutes);
-app.use(`/api/${process.env.API_VERSION || 'v1'}/storage`, createAccountRateLimiter(redisClient), storageRoutes);
-app.use(`/api/${process.env.API_VERSION || 'v1'}/analytics`, createAccountRateLimiter(redisClient), analyticsRoutes);
-app.use(`/api/${process.env.API_VERSION || 'v1'}/webhooks`, webhookRoutes);
+// Tutorial endpoints
+app.get('/api/v1/tutorials', (req, res) => {
+  res.json({
+    success: true,
+    data: tutorials,
+    total: tutorials.length,
+  });
+});
+
+app.post('/api/v1/tutorials', (req, res) => {
+  const { title, description, type } = req.body;
+  
+  if (!title) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title is required',
+    });
+  }
+  
+  const newTutorial = {
+    id: `tutorial_${Date.now()}`,
+    title,
+    description: description || 'A new tutorial',
+    type: type || 'manual',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  tutorials.push(newTutorial);
+  
+  logger.info(`Tutorial created: ${title}`);
+  
+  res.status(201).json({
+    success: true,
+    message: 'Tutorial created successfully',
+    data: newTutorial,
+  });
+});
 
 // 404 handler
 app.use(notFoundHandler);
@@ -152,36 +174,13 @@ app.use(notFoundHandler);
 // Error handling middleware
 app.use(errorHandler);
 
-// Graceful shutdown
-const gracefulShutdown = async (signal) => {
-  logger.info(`${signal} received, shutting down gracefully`);
-  
-  try {
-    if (redisClient) {
-      await redisClient.quit();
-      logger.info('Redis connection closed');
-    }
-    
-    await import('./database/connection.js').then(m => m.disconnectDB());
-    logger.info('MongoDB connection closed');
-    
-    process.exit(0);
-  } catch (error) {
-    logger.error('Error during graceful shutdown:', error);
-    process.exit(1);
-  }
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
 // Start server
 app.listen(PORT, () => {
   logger.info(`🚀 Zilliance Backend Server running on port ${PORT}`);
   logger.info(`🌍 Environment: ${NODE_ENV}`);
   logger.info(`📊 Health check: http://localhost:${PORT}/health`);
-  logger.info(`🔗 API Base: http://localhost:${PORT}/api/${process.env.API_VERSION || 'v1'}`);
-  logger.info(`🔒 Security: ${NODE_ENV === 'production' ? 'Production' : 'Development'} mode`);
+  logger.info(`🔗 API Base: http://localhost:${PORT}/api/v1`);
+  logger.info(`⚠️  Running in development mode without external databases`);
 });
 
 export default app;
