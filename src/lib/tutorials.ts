@@ -109,6 +109,7 @@ export interface TutorialSearchParams {
   tags?: string;
   authorId?: string;
   isPublished?: boolean;
+  isPublic?: boolean;
   minRating?: number;
   maxDuration?: number;
   sortBy?: 'title' | 'createdAt' | 'updatedAt' | 'rating' | 'viewCount';
@@ -138,6 +139,7 @@ export interface TutorialSearchResponse {
 export interface StepSearchParams {
   tutorialId?: string;
   type?: string;
+  query?: string;
   isCompleted?: boolean;
   page?: number;
   limit?: number;
@@ -359,7 +361,12 @@ class TutorialManager {
         throw new Error(response.message || 'Failed to get tutorial progress');
       }
 
-      return response.data;
+      return response.data || {
+        completedSteps: 0,
+        totalSteps: 0,
+        percentage: 0,
+        estimatedTimeRemaining: 0
+      };
     } catch (error) {
       console.error('Failed to get tutorial progress:', error);
       throw error;

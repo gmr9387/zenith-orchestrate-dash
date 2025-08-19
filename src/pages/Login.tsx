@@ -40,7 +40,12 @@ const Login: React.FC = () => {
 
       if (data.success) {
         // Store tokens
-        authManager.setTokens(data.data.tokens.accessToken, data.data.tokens.refreshToken);
+        authManager.setToken({
+          access_token: data.data.tokens.accessToken,
+          refresh_token: data.data.tokens.refreshToken,
+          expires_at: Date.now() + 3600000, // 1 hour from now
+          user_id: data.data.user.id
+        });
         
         // Store user data
         localStorage.setItem('user', JSON.stringify(data.data.user));

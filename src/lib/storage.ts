@@ -1,4 +1,5 @@
 import { apiClient, ApiResponse } from './api';
+import { authManager } from './auth';
 
 export interface StorageConfig {
   provider: 's3' | 'minio' | 'digitalocean' | 'cloudflare';
@@ -40,7 +41,7 @@ class S3StorageManager {
       this.config = config;
       
       // Test connection to storage service
-      await this.testConnection();
+      await this.testStorageConnection();
       
       this.isInitialized = true;
       console.log('Storage manager initialized successfully');
@@ -50,7 +51,7 @@ class S3StorageManager {
     }
   }
 
-  private async testConnection(): Promise<void> {
+  private async testStorageConnection(): Promise<void> {
     try {
       const response = await apiClient.post('/storage/test-connection');
       if (!response.success) {
