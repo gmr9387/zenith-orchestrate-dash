@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: zilliance-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: zilliance123
+      MONGO_INITDB_DATABASE: zilliance
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - zilliance-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: zilliance-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - zilliance-network
+
+  # MinIO Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: zilliance-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: zilliance
+      MINIO_ROOT_PASSWORD: zilliance123
+      MINIO_DEFAULT_BUCKETS: zilliance-storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - zilliance-network
+
+  # MongoDB Express (Web-based admin interface)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: zilliance-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: zilliance123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:zilliance123@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: zilliance123
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    networks:
+      - zilliance-network
+
+  # Backend API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zilliance-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      MONGODB_URI: mongodb://admin:zilliance123@mongodb:27017/zilliance?authSource=admin
+      REDIS_URL: redis://redis:6379
+      STORAGE_PROVIDER: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: zilliance-storage
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY_ID: zilliance
+      STORAGE_SECRET_ACCESS_KEY: zilliance123
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      AUTH_SESSION_SECRET: your-session-secret-key
+      AUTH_COOKIE_SECRET: your-cookie-secret-key
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+    depends_on:
+      - mongodb
+      - redis
+      - minio
+    networks:
+      - zilliance-network
+    command: npm run dev
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  zilliance-network:
+    driver: bridge
