@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, TutorialDoc } from "@/lib/db";
+import { hasBackend, apiGet } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function Tutorials() {
@@ -8,8 +9,13 @@ export default function Tutorials() {
   const navigate = useNavigate();
   useEffect(() => {
     (async () => {
-      const all = await db.tutorials.orderBy("updatedAt").reverse().toArray();
-      setItems(all);
+      if (hasBackend()) {
+        const rows = await apiGet<TutorialDoc[]>(`/api/tutorials`);
+        setItems(rows);
+      } else {
+        const all = await db.tutorials.orderBy("updatedAt").reverse().toArray();
+        setItems(all);
+      }
     })();
   }, []);
   return (

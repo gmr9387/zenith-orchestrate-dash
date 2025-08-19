@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, TutorialStep, TutorialDoc, TutorialMedia } from "@/lib/db";
+import { hasBackend, apiPost, apiUpload } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 
@@ -56,7 +57,12 @@ export default function TutorialRecord() {
       updatedAt: Date.now(),
       stepCount: 0,
     };
-    await db.tutorials.put(doc);
+    if (hasBackend()) {
+      const created = await apiPost<{ id: string }>(`/api/tutorials`, { title });
+      tutorialIdRef.current = created.id;
+    } else {
+      await db.tutorials.put(doc);
+    }
     toast("Recording started", { description: title });
 
     // Optional: start screen capture if supported
@@ -69,8 +75,11 @@ export default function TutorialRecord() {
         mr.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data); };
         mr.onstop = async () => {
           const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-          const media: TutorialMedia = { id: tutorialIdRef.current, mimeType: 'video/webm', createdAt: Date.now(), blob };
-          await db.media.put(media);
+          if (hasBackend()) await apiUpload(`/api/tutorials/${tutorialIdRef.current}/media`, blob);
+          else {
+            const media: TutorialMedia = { id: tutorialIdRef.current, mimeType: 'video/webm', createdAt: Date.now(), blob };
+            await db.media.put(media);
+          }
         };
         mr.start();
       } catch {
@@ -84,8 +93,13 @@ export default function TutorialRecord() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
-    const count = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
-    await db.tutorials.update(tutorialIdRef.current, { updatedAt: Date.now(), stepCount: count });
+    if (hasBackend()) {
+      const steps = await db.steps.where('tutorialId').equals(tutorialIdRef.current).sortBy('ts');
+      await apiPost(`/api/tutorials/${tutorialIdRef.current}/steps`, { steps: steps.map(s => ({ ts: s.ts, kind: s.kind, selector: s.selector, key: s.key, title: s.title })) });
+    } else {
+      const count = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
+      await db.tutorials.update(tutorialIdRef.current, { updatedAt: Date.now(), stepCount: count });
+    }
     toast("Recording saved", { description: `${count} steps` });
     navigate(`/tutorial/${tutorialIdRef.current}`);
   }

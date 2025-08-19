@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { db, TutorialStep, TutorialDoc, TutorialMedia } from "@/lib/db";
+import { hasBackend, apiGet } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function TutorialView() {
@@ -13,12 +14,27 @@ export default function TutorialView() {
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const d = await db.tutorials.get(id);
-      setDoc(d ?? null);
-      const s = await db.steps.where("tutorialId").equals(id).sortBy("ts");
-      setSteps(s);
-      const m: TutorialMedia | undefined = await db.media.get(id);
-      if (m) setMediaUrl(URL.createObjectURL(m.blob));
+      if (hasBackend()) {
+        try {
+          const t = await apiGet<{ id: string; title: string; createdAt: number; updatedAt: number; stepCount: number; steps: TutorialStep[] }>(`/api/tutorials/${id}`);
+          setDoc({ id: t.id, title: t.title, createdAt: t.createdAt, updatedAt: t.updatedAt, stepCount: t.stepCount });
+          setSteps(t.steps);
+          // try media endpoint
+          const url = (import.meta.env.VITE_API_URL as string) + `/api/tutorials/${id}/media`;
+          const head = await fetch(url, { method: 'HEAD' });
+          if (head.ok) setMediaUrl(url);
+        } catch {
+          // fall back to local
+        }
+      }
+      if (!hasBackend()) {
+        const d = await db.tutorials.get(id);
+        setDoc(d ?? null);
+        const s = await db.steps.where("tutorialId").equals(id).sortBy("ts");
+        setSteps(s);
+        const m: TutorialMedia | undefined = await db.media.get(id);
+        if (m) setMediaUrl(URL.createObjectURL(m.blob));
+      }
     })();
   }, [id]);
 
