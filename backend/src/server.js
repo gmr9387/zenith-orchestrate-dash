@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import morgan from 'express-morgan';
+import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import session from 'express-session';
 import RedisStore from 'connect-redis';

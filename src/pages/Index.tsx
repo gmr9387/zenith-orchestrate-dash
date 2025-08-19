@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { 
-  BookOpen, 
-  Users, 
-  TrendingUp, 
-  Plus,
-  Search,
-  Filter
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Share, Video, Zap, Wrench, Users, BarChart3,
+  Play, Plus, Calendar, Settings, Search, Command,
+  TrendingUp, Activity, ExternalLink, Bell, BookOpen, Filter
 } from 'lucide-react';
+import { CommandPalette } from '@/components/CommandPalette';
+import { HeroMetrics } from '@/components/HeroMetrics';
+import { ActivityFeed } from '@/components/ActivityFeed';
+import { ToolCard } from '@/components/ToolCard';
+import { toast } from '@/components/ui/sonner';
+import { NetworkVisualization } from '@/components/NetworkVisualization';
+
+// Import hero images
+import apiHubHero from '@/assets/api-hub-hero.jpg';
+import tutorialBuilderHero from '@/assets/tutorial-builder-hero.jpg';
+import videoCreatorHero from '@/assets/video-creator-hero.jpg';
+import workflowEngineHero from '@/assets/workflow-engine-hero.jpg';
+import appBuilderHero from '@/assets/app-builder-hero.jpg';
+import crmSuiteHero from '@/assets/crm-suite-hero.jpg';
 
 const Index: React.FC = () => {
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const openToast = (title: string, description?: string) => toast(title, { description });
+
   return (
     <>
       {/* Welcome Section */}
@@ -80,7 +94,7 @@ const Index: React.FC = () => {
         </Card>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions and Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <Card>
           <CardHeader>
@@ -99,12 +113,12 @@ const Index: React.FC = () => {
                 Create New Tutorial
               </Button>
             </Link>
-            
-            <Button className="w-full justify-start" variant="outline">
-              <Search className="mr-2 h-4 w-4" />
-              Browse Tutorials
-            </Button>
-            
+            <Link to="/tutorials">
+              <Button className="w-full justify-start" variant="outline">
+                <Search className="mr-2 h-4 w-4" />
+                Browse Tutorials
+              </Button>
+            </Link>
             <Button className="w-full justify-start" variant="outline">
               <Filter className="mr-2 h-4 w-4" />
               Manage Content
@@ -128,7 +142,6 @@ const Index: React.FC = () => {
                 </span>
                 <span className="text-xs text-gray-400 ml-auto">2h ago</span>
               </div>
-              
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span className="text-sm text-gray-600">
@@ -136,7 +149,6 @@ const Index: React.FC = () => {
                 </span>
                 <span className="text-xs text-gray-400 ml-auto">4h ago</span>
               </div>
-              
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                 <span className="text-sm text-gray-600">
@@ -149,41 +161,159 @@ const Index: React.FC = () => {
         </Card>
       </div>
 
-      {/* Tutorial Builder Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <BookOpen className="h-5 w-5" />
-            <span>Tutorial Builder</span>
-          </CardTitle>
-          <CardDescription>
-            Create, manage, and optimize your tutorials
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-2">
-                Build engaging tutorials with our powerful editor
-              </p>
-              <div className="flex space-x-2">
-                <Badge variant="secondary">24 Tutorials</Badge>
-                <Badge variant="secondary">156 Steps</Badge>
-                <Badge variant="secondary">89% Completion</Badge>
+      {/* Premium Tool Cards - Masonry Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+        {/* API Hub Card */}
+        <ToolCard
+          title="API Hub"
+          description="Integration management with live network visualizations"
+          image={apiHubHero}
+          icon={<Share className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening API Hub', 'Deep link coming soon')}
+          metrics={[
+            { label: 'Active Integrations', value: '89', color: 'text-success' },
+            { label: 'Data Processed', value: '2.4TB', color: 'text-primary' },
+          ]}
+          actions={[
+            { label: 'Add Integration', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Add Integration', 'Connector gallery coming soon') },
+            { label: 'Analytics', icon: <BarChart3 className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Analytics') },
+          ]}
+        >
+          <div className="mb-4">
+            <NetworkVisualization />
+          </div>
+        </ToolCard>
+
+        {/* Tutorial Builder Card */}
+        <ToolCard
+          title="Tutorial Builder"
+          description="AI-powered screen recording and tutorial generation"
+          image={tutorialBuilderHero}
+          icon={<Video className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening Tutorial Builder')}
+          onPreview={async () => {
+            const { db } = await import('@/lib/db');
+            const recent = await db.tutorials.orderBy('updatedAt').reverse().first();
+            if (recent) window.location.href = `/tutorial/${recent.id}`;
+            else window.location.href = '/tutorial/record';
+          }}
+          metrics={[
+            { label: 'Tutorials Created', value: '1,847', color: 'text-success' },
+            { label: 'Avg. Duration', value: '12m', color: 'text-primary' },
+          ]}
+          actions={[
+            { label: 'Generate Tutorial', icon: <Play className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/tutorial/record?title=New%20Tutorial'; } },
+            { label: 'Auto Generate', icon: <Zap className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/tutorial/auto'; } },
+            { label: 'View Library', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/tutorials'; } },
+          ]}
+        >
+          <div className="mb-4 p-4 bg-muted/30 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-8 bg-primary/20 rounded border border-primary/30 flex items-center justify-center">
+                <Play className="h-3 w-3 text-primary" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">Advanced CRM Workflows</div>
+                <div className="text-xs text-muted-foreground">Generating... 45% complete</div>
               </div>
             </div>
-            
-            <Link to="/tutorial-builder">
-              <Button>
-                <BookOpen className="mr-2 h-4 w-4" />
-                Open Tutorial Builder
-              </Button>
-            </Link>
           </div>
-        </CardContent>
-      </Card>
+        </ToolCard>
+
+        {/* Video Creator Card */}
+        <ToolCard
+          title="Video Creator"
+          description="Browser-native video editing with Hollywood-level capabilities"
+          image={videoCreatorHero}
+          icon={<Video className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening Video Creator')}
+          metrics={[
+            { label: 'Projects Active', value: '23', color: 'text-warning' },
+            { label: 'Rendered This Week', value: '156', color: 'text-success' },
+          ]}
+          actions={[
+            { label: 'New Project', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Create Video Project', 'Template picker coming soon') },
+            { label: 'Templates', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Templates') },
+          ]}
+        />
+
+        {/* Workflow Engine Card */}
+        <ToolCard
+          title="Workflow Engine"
+          description="Visual business process automation that rivals Zapier"
+          image={workflowEngineHero}
+          icon={<Zap className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening Workflow Engine')}
+          metrics={[
+            { label: 'Active Workflows', value: '247', color: 'text-primary' },
+            { label: 'Tasks Automated', value: '12.4K', color: 'text-success' },
+          ]}
+          actions={[
+            { label: 'Create Workflow', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Create Workflow', 'Drag-and-drop builder coming soon') },
+            { label: 'Templates', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Templates') },
+          ]}
+        />
+
+        {/* App Builder Card */}
+        <ToolCard
+          title="App Builder"
+          description="Low-code platform for building custom business applications"
+          image={appBuilderHero}
+          icon={<Wrench className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening App Builder')}
+          metrics={[
+            { label: 'Apps Built', value: '34', color: 'text-success' },
+            { label: 'Components', value: '500+', color: 'text-primary' },
+          ]}
+          actions={[
+            { label: 'Build App', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Build App', 'Schema to React generator next') },
+            { label: 'Component Library', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Components') },
+          ]}
+        />
+
+        {/* CRM Suite Card */}
+        <ToolCard
+          title="CRM Suite"
+          description="Next-generation customer relationship management"
+          image={crmSuiteHero}
+          icon={<Users className="h-6 w-6 text-primary" />}
+          onOpen={() => openToast('Opening CRM Suite')}
+          metrics={[
+            { label: 'Active Contacts', value: '8,567', color: 'text-success' },
+            { label: 'Pipeline Value', value: '$2.4M', color: 'text-primary' },
+          ]}
+          actions={[
+            { label: 'Add Contact', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Add Contact', 'Contact form coming soon') },
+            { label: 'View Pipeline', icon: <TrendingUp className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Pipeline') },
+          ]}
+        />
+      </div>
+
+      {/* Cross-Tool Intelligence Section */}
+      <div className="mt-16 glass-card rounded-2xl p-8 animate-fade-in">
+        <h2 className="text-2xl font-bold mb-4 text-center">Cross-Tool Intelligence</h2>
+        <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
+          Watch your tools work together seamlessly. Smart workflows suggest the next best action across your entire automation suite.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center p-6 rounded-xl bg-muted/30 hover-lift">
+            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <Zap className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+
+          <Link to="/tutorial-builder">
+            <Button>
+              <BookOpen className="mr-2 h-4 w-4" />
+              Open Tutorial Builder
+            </Button>
+          </Link>
+        </div>
+      </div>
     </>
   );
 };
 
 export default Index;
+

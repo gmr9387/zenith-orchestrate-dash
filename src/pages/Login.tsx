@@ -24,7 +24,8 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/login', {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiBase}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,8 +69,7 @@ const Login: React.FC = () => {
   };
 
   const handleForgotPassword = () => {
-    // TODO: Implement forgot password functionality
-    setError('Forgot password functionality coming soon');
+    navigate('/forgot-password');
   };
 
   return (

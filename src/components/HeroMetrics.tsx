@@ -1,4 +1,5 @@
 import { TrendingUp, Activity, Zap, BarChart3 } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 const metrics = [
   {
@@ -41,8 +42,11 @@ export function HeroMetrics() {
       {metrics.map((metric, index) => (
         <div 
           key={metric.label}
-          className="hero-metric"
+          className="hero-metric cursor-pointer"
           style={{ animationDelay: `${index * 0.1}s` }}
+          onClick={() => toast(metric.label, { description: `${metric.value} (${metric.change})` })}
+          role="button"
+          tabIndex={0}
         >
           <div className="flex items-center justify-between mb-3">
             <metric.icon className={`h-6 w-6 ${metric.color}`} />

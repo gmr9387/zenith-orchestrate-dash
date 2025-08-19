@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Zap, Video, Share, Workflow, Wrench, Users, Command } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/sonner";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -36,6 +37,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       command.category.toLowerCase().includes(search.toLowerCase())
   );
 
+  const run = (label: string) => {
+    toast(label, { description: "Action will be wired to modules shortly" });
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="command-palette max-w-2xl p-0 gap-0">
@@ -65,6 +71,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <div
                   key={index}
                   className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-muted/50 cursor-pointer group transition-all duration-200 hover-lift"
+                  onClick={() => run(command.label)}
                 >
                   <command.icon className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
                   <div className="flex-1">
