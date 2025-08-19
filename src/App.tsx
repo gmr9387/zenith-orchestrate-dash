@@ -6,6 +6,8 @@ import { authManager } from './lib/auth';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import TutorialBuilder from './pages/TutorialBuilder';
 import UserProfile from './pages/UserProfile';
 import DashboardLayout from './components/DashboardLayout';
@@ -164,6 +166,16 @@ function App() {
           <Route path="/register" element={
             <PublicRoute>
               <Register />
+            </PublicRoute>
+          } />
+          <Route path="/forgot-password" element={
+            <PublicRoute>
+              <ForgotPassword />
+            </PublicRoute>
+          } />
+          <Route path="/reset-password" element={
+            <PublicRoute>
+              <ResetPassword />
             </PublicRoute>
           } />
           
