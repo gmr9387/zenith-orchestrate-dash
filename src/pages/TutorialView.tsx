@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { db, TutorialStep, TutorialDoc } from "@/lib/db";
+import { db, TutorialStep, TutorialDoc, TutorialMedia } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 
 export default function TutorialView() {
@@ -8,6 +8,7 @@ export default function TutorialView() {
   const [doc, setDoc] = useState<TutorialDoc | null>(null);
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   const [idx, setIdx] = useState(0);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -16,6 +17,8 @@ export default function TutorialView() {
       setDoc(d ?? null);
       const s = await db.steps.where("tutorialId").equals(id).sortBy("ts");
       setSteps(s);
+      const m: TutorialMedia | undefined = await db.media.get(id);
+      if (m) setMediaUrl(URL.createObjectURL(m.blob));
     })();
   }, [id]);
 
@@ -31,6 +34,11 @@ export default function TutorialView() {
         <h1 className="text-2xl font-bold">{doc?.title ?? "Tutorial"}</h1>
         <div className="text-sm text-muted-foreground">{steps.length} steps</div>
       </div>
+      {mediaUrl && (
+        <div className="mb-4 rounded-lg overflow-hidden border">
+          <video src={mediaUrl} controls className="w-full h-auto" />
+        </div>
+      )}
       <div className="mb-4 h-2 bg-muted rounded">
         <div className="h-2 bg-primary rounded" style={{ width: `${progress}%` }} />
       </div>

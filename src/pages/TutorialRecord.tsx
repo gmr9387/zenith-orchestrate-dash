@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { db, TutorialStep, TutorialDoc } from "@/lib/db";
+import { db, TutorialStep, TutorialDoc, TutorialMedia } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 
@@ -10,8 +10,12 @@ export default function TutorialRecord() {
   const [recording, setRecording] = useState(false);
   const tutorialIdRef = useRef<string>(crypto.randomUUID());
   const [title, setTitle] = useState<string>(() => params.get("title") || "Untitled Tutorial");
+  const [recorderSupported, setRecorderSupported] = useState<boolean>(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
+    setRecorderSupported(Boolean(navigator.mediaDevices?.getDisplayMedia));
     if (!recording) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Element;
@@ -54,10 +58,32 @@ export default function TutorialRecord() {
     };
     await db.tutorials.put(doc);
     toast("Recording started", { description: title });
+
+    // Optional: start screen capture if supported
+    if (recorderSupported) {
+      try {
+        const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true, audio: false });
+        const mr = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+        mediaRecorderRef.current = mr;
+        chunksRef.current = [];
+        mr.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data); };
+        mr.onstop = async () => {
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+          const media: TutorialMedia = { id: tutorialIdRef.current, mimeType: 'video/webm', createdAt: Date.now(), blob };
+          await db.media.put(media);
+        };
+        mr.start();
+      } catch {
+        // ignore permission errors, proceed with step recording
+      }
+    }
   }
 
   async function stop() {
     setRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
     const count = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
     await db.tutorials.update(tutorialIdRef.current, { updatedAt: Date.now(), stepCount: count });
     toast("Recording saved", { description: `${count} steps` });

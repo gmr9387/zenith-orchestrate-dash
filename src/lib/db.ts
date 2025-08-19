@@ -19,14 +19,27 @@ export interface TutorialDoc {
   stepCount: number;
 }
 
+export interface TutorialMedia {
+  id: string; // tutorialId
+  mimeType: string;
+  createdAt: number;
+  blob: Blob;
+}
+
 class AppDB extends Dexie {
   tutorials!: Table<TutorialDoc, string>;
   steps!: Table<TutorialStep, number>;
+  media!: Table<TutorialMedia, string>;
   constructor() {
     super("zilliance-app");
     this.version(1).stores({
       tutorials: "id, updatedAt, createdAt, title",
       steps: "++id, tutorialId, ts",
+    });
+    this.version(2).stores({
+      tutorials: "id, updatedAt, createdAt, title",
+      steps: "++id, tutorialId, ts",
+      media: "id",
     });
   }
 }
