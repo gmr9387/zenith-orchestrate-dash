@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, Play, Clock, Star, Eye } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, Play, Clock, Star, Eye, Plus, MoreHorizontal, Edit, Trash2, EyeOff, Globe, Lock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { tutorialManager, TutorialSearchParams, TutorialSearchResponse, Tutorial } from '../lib/tutorials';
+import { TutorialForm } from './TutorialForm';
 
 interface TutorialSearchProps {
   onTutorialSelect?: (tutorial: Tutorial) => void;
@@ -24,6 +26,7 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
   const [searchResults, setSearchResults] = useState<TutorialSearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedTutorial, setSelectedTutorial] = useState<Tutorial | null>(null);
 
   const performSearch = async () => {
     setIsLoading(true);
@@ -58,27 +61,159 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
     onTutorialSelect?.(tutorial);
   };
 
+  const handleTutorialSave = (tutorial: Tutorial) => {
+    // Refresh search results after creating/updating
+    performSearch();
+  };
+
+  const handleDeleteTutorial = async (tutorialId: string) => {
+    if (!confirm('Are you sure you want to delete this tutorial? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await tutorialManager.deleteTutorial(tutorialId);
+      performSearch(); // Refresh results
+    } catch (error) {
+      console.error('Failed to delete tutorial:', error);
+      alert('Failed to delete tutorial. Please try again.');
+    }
+  };
+
+  const handlePublishToggle = async (tutorial: Tutorial) => {
+    try {
+      if (tutorial.isPublished) {
+        await tutorialManager.unpublishTutorial(tutorial._id!);
+      } else {
+        await tutorialManager.publishTutorial(tutorial._id!);
+      }
+      performSearch(); // Refresh results
+    } catch (error) {
+      console.error('Failed to toggle publish status:', error);
+      alert('Failed to update tutorial status. Please try again.');
+    }
+  };
+
   const renderTutorialCard = (tutorial: Tutorial) => (
     <div
       key={tutorial._id}
-      className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer group relative"
       onClick={() => handleTutorialClick(tutorial)}
     >
-      <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center">
+      {/* Action Menu */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTutorial(tutorial);
+            }}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              handlePublishToggle(tutorial);
+            }}>
+              {tutorial.isPublished ? (
+                <>
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  Unpublish
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Publish
+                </>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteTutorial(tutorial._id!);
+              }}
+              className="text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Thumbnail */}
+      <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center overflow-hidden">
         {tutorial.thumbnailUrl ? (
           <img
             src={tutorial.thumbnailUrl}
             alt={tutorial.title}
-            className="w-full h-full object-cover rounded-md"
+            className="w-full h-full object-cover rounded-md group-hover:scale-105 transition-transform duration-200"
           />
         ) : (
-          <Play className="h-8 w-8 text-muted-foreground" />
+          <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+            <Play className="h-8 w-8 text-blue-400" />
+          </div>
         )}
       </div>
       
-      <h3 className="font-semibold text-sm mb-2 line-clamp-2">{tutorial.title}</h3>
-      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{tutorial.description}</p>
+      {/* Status Badge */}
+      <div className="flex items-center gap-2 mb-2">
+        {tutorial.isPublished ? (
+          <Badge variant="default" className="text-xs">
+            <Eye className="mr-1 h-3 w-3" />
+            Published
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="text-xs">
+            <EyeOff className="mr-1 h-3 w-3" />
+            Draft
+          </Badge>
+        )}
+        
+        {tutorial.isPublic ? (
+          <Badge variant="outline" className="text-xs">
+            <Globe className="mr-1 h-3 w-3" />
+            Public
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-xs">
+            <Lock className="mr-1 h-3 w-3" />
+            Private
+          </Badge>
+        )}
+      </div>
       
+      {/* Title and Description */}
+      <h3 className="font-semibold text-sm mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+        {tutorial.title}
+      </h3>
+      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+        {tutorial.description}
+      </p>
+      
+      {/* Tags */}
+      {tutorial.tags && tutorial.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {tutorial.tags.slice(0, 3).map((tag, index) => (
+            <Badge key={index} variant="secondary" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+          {tutorial.tags.length > 3 && (
+            <Badge variant="outline" className="text-xs">
+              +{tutorial.tags.length - 3}
+            </Badge>
+          )}
+        </div>
+      )}
+      
+      {/* Category and Difficulty */}
       <div className="flex items-center gap-2 mb-3">
         <Badge variant="secondary" className="text-xs">
           {tutorial.difficulty}
@@ -88,6 +223,7 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
         </Badge>
       </div>
       
+      {/* Stats */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
@@ -100,6 +236,19 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
         <div className="flex items-center gap-1">
           <Eye className="h-3 w-3" />
           <span>{tutorial.viewCount || 0}</span>
+        </div>
+      </div>
+
+      {/* Steps Count */}
+      <div className="mt-2 pt-2 border-t border-border">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{tutorial.steps?.length || 0} steps</span>
+          <span className="text-primary font-medium">
+            {tutorial.completionStats?.completionRate ? 
+              `${Math.round(tutorial.completionStats.completionRate)}% completion` : 
+              'New'
+            }
+          </span>
         </div>
       </div>
     </div>
@@ -182,25 +331,29 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Search Header */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tutorials..."
-            value={searchParams.query}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
-          />
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex-1 flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tutorials..."
+              value={searchParams.query}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+          </Button>
         </div>
         
-        <Button
-          variant="outline"
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-        </Button>
+        <TutorialForm onSave={handleTutorialSave} />
       </div>
 
       {/* Filters */}
@@ -223,6 +376,11 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
                   <SelectItem value="marketing">Marketing</SelectItem>
                   <SelectItem value="sales">Sales</SelectItem>
                   <SelectItem value="development">Development</SelectItem>
+                  <SelectItem value="design">Design</SelectItem>
+                  <SelectItem value="finance">Finance</SelectItem>
+                  <SelectItem value="healthcare">Healthcare</SelectItem>
+                  <SelectItem value="education">Education</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -260,6 +418,7 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
                   <SelectItem value="updatedAt">Date Updated</SelectItem>
                   <SelectItem value="rating">Rating</SelectItem>
                   <SelectItem value="viewCount">Views</SelectItem>
+                  <SelectItem value="estimatedDuration">Duration</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -294,6 +453,19 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
                 Published only
               </label>
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="public-only"
+                checked={searchParams.isPublic === true}
+                onCheckedChange={(checked) => 
+                  handleFilterChange('isPublic', checked ? true : undefined)
+                }
+              />
+              <label htmlFor="public-only" className="text-sm">
+                Public only
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -319,6 +491,15 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
                 {Math.min(searchResults.pagination.page * searchResults.pagination.limit, searchResults.pagination.total)} of{' '}
                 {searchResults.pagination.total} tutorials
               </p>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {searchResults.tutorials.filter(t => t.isPublished).length} published
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {searchResults.tutorials.filter(t => !t.isPublished).length} drafts
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -329,10 +510,20 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
           </>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
-            No tutorials found. Try adjusting your search criteria.
+            No tutorials found. Try adjusting your search criteria or create your first tutorial!
           </div>
         )}
       </div>
+
+      {/* Edit Tutorial Dialog */}
+      {selectedTutorial && (
+        <TutorialForm
+          tutorial={selectedTutorial}
+          mode="edit"
+          onSave={handleTutorialSave}
+          onCancel={() => setSelectedTutorial(null)}
+        />
+      )}
     </div>
   );
 };
