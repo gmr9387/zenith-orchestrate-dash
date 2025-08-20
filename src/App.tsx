@@ -22,6 +22,7 @@ import Tutorials from './pages/Tutorials';
 import TutorialAuto from './pages/TutorialAuto';
 import TutorialView from './pages/TutorialView';
 import VerifyEmail from './pages/VerifyEmail';
+import Reports from './pages/Reports';
 import './styles/animations.css';
 
 // Create a client
@@ -248,6 +249,14 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <TutorialView />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/reports" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Reports />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
