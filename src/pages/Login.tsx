@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Sparkles, Crown } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,6 +16,52 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+
+  // Demo mode login - bypasses backend for easier testing
+  const handleDemoLogin = async () => {
+    setError('');
+    setSuccess('');
+    setIsLoading(true);
+
+    try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Create demo user data
+      const demoUser = {
+        id: 'demo_admin_123',
+        email: 'demo@zilliance.com',
+        firstName: 'Demo',
+        lastName: 'Admin',
+        role: 'admin',
+        isEmailVerified: true,
+        permissions: ['read:tutorials', 'write:tutorials', 'delete:tutorials', 'read:users', 'write:users', 'read:analytics', 'admin:system']
+      };
+
+      // Store demo tokens
+      authManager.setToken({
+        access_token: `demo_access_token_${Date.now()}`,
+        refresh_token: `demo_refresh_token_${Date.now()}`,
+        expires_at: Date.now() + 3600000, // 1 hour from now
+        user_id: demoUser.id
+      });
+      
+      // Store user data
+      localStorage.setItem('user', JSON.stringify(demoUser));
+      
+      setSuccess('Demo login successful! Redirecting...');
+      
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
+    } catch (error) {
+      console.error('Demo login error:', error);
+      setError('Demo login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +90,7 @@ const Login: React.FC = () => {
         authManager.setToken({
           access_token: data.data.tokens.accessToken,
           refresh_token: data.data.tokens.refreshToken,
-          expires_at: Date.now() + 3600000, // 1 hour from now
+          expires_at: Date.now() + (data.data.tokens.expiresIn * 1000),
           user_id: data.data.user.id
         });
         
@@ -73,19 +119,24 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your Zilliance account
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-600 via-pink-600 to-cyan-600 rounded-2xl flex items-center justify-center shadow-2xl">
+              <Crown className="h-8 w-8 text-white" />
+            </div>
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Welcome to Zilliance</h1>
+          <p className="text-lg text-purple-200">
+            Sign in to your enterprise automation platform
           </p>
         </div>
 
-        <Card>
+        <Card className="glass-card border-purple-500/20">
           <CardHeader>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-purple-200">Sign In</CardTitle>
+            <CardDescription className="text-purple-300">
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
@@ -104,7 +155,7 @@ const Login: React.FC = () => {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
+                <Label htmlFor="email" className="text-purple-200">Email address</Label>
                 <Input
                   id="email"
                   type="email"
@@ -113,11 +164,12 @@ const Login: React.FC = () => {
                   placeholder="Enter your email"
                   required
                   disabled={isLoading}
+                  className="bg-slate-800 border-purple-500/30 text-white placeholder-purple-400"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-purple-200">Password</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -127,6 +179,7 @@ const Login: React.FC = () => {
                     placeholder="Enter your password"
                     required
                     disabled={isLoading}
+                    className="bg-slate-800 border-purple-500/30 text-white placeholder-purple-400"
                   />
                   <button
                     type="button"
@@ -135,9 +188,9 @@ const Login: React.FC = () => {
                     disabled={isLoading}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-400" />
+                      <EyeOff className="h-4 w-4 text-purple-400" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-400" />
+                      <Eye className="h-4 w-4 text-purple-400" />
                     )}
                   </button>
                 </div>
@@ -147,7 +200,7 @@ const Login: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  className="text-sm text-blue-600 hover:text-blue-500"
+                  className="text-sm text-purple-400 hover:text-purple-300"
                   disabled={isLoading}
                 >
                   Forgot your password?
@@ -156,7 +209,7 @@ const Login: React.FC = () => {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -170,16 +223,38 @@ const Login: React.FC = () => {
               </Button>
             </form>
 
+            {/* Demo Login Button */}
+            <div className="mt-6">
+              <Button
+                onClick={handleDemoLogin}
+                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white border-0"
+                disabled={isLoading}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {isLoading ? 'Signing in...' : 'Try Demo Mode'}
+              </Button>
+            </div>
+
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-purple-300">
                 Don't have an account?{' '}
                 <Link
                   to="/register"
-                  className="font-medium text-blue-600 hover:text-blue-500"
+                  className="font-medium text-purple-400 hover:text-purple-300"
                 >
                   Sign up
                 </Link>
               </p>
+            </div>
+
+            {/* Demo Credentials */}
+            <div className="mt-6 p-4 bg-purple-900/30 rounded-lg border border-purple-500/20">
+              <h3 className="text-sm font-medium text-purple-200 mb-2">Demo Credentials:</h3>
+              <div className="text-xs text-purple-300 space-y-1">
+                <div><strong>Email:</strong> owner@zilliance.com</div>
+                <div><strong>Password:</strong> ChangeMe!234</div>
+                <div className="text-purple-400 mt-2">Or use the Demo Mode button above for instant access!</div>
+              </div>
             </div>
           </CardContent>
         </Card>
