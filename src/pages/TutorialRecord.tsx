@@ -97,10 +97,11 @@ export default function TutorialRecord() {
       const steps = await db.steps.where('tutorialId').equals(tutorialIdRef.current).sortBy('ts');
       await apiPost(`/api/tutorials/${tutorialIdRef.current}/steps`, { steps: steps.map(s => ({ ts: s.ts, kind: s.kind, selector: s.selector, key: s.key, title: s.title })) });
     } else {
-      const count = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
-      await db.tutorials.update(tutorialIdRef.current, { updatedAt: Date.now(), stepCount: count });
+      const stepCount = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
+      await db.tutorials.update(tutorialIdRef.current, { updatedAt: Date.now(), stepCount });
     }
-    toast("Recording saved", { description: `${count} steps` });
+    const finalCount = await db.steps.where("tutorialId").equals(tutorialIdRef.current).count();
+    toast("Recording saved", { description: `${finalCount} steps` });
     navigate(`/tutorial/${tutorialIdRef.current}`);
   }
 

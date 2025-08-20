@@ -39,7 +39,7 @@ const Index: React.FC = () => {
       setLoading(true);
       const response = await apiClient.get('/tutorials');
       if (response.success) {
-        setTutorials(response.data || []);
+        setTutorials(Array.isArray(response.data) ? response.data : []);
       }
     } catch (error) {
       console.error('Failed to load tutorials:', error);
@@ -60,7 +60,6 @@ const Index: React.FC = () => {
       await db.tutorials.add({
         id: tutorialId,
         title,
-        description,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         stepCount: 0,
