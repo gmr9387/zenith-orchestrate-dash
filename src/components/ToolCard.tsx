@@ -54,6 +54,8 @@ export function ToolCard({
         <img 
           src={image} 
           alt={title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -113,7 +115,7 @@ export function ToolCard({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="rounded-lg overflow-hidden">
-            <img src={image} alt={`${title} preview`} className="w-full h-auto" />
+            <img src={image} alt={`${title} preview`} loading="lazy" decoding="async" className="w-full h-auto" />
           </div>
         </DialogContent>
       </Dialog>
