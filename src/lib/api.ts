@@ -198,3 +198,13 @@ export async function apiUpload(path: string, file: Blob, field = 'file'): Promi
   const res = await fetch(API_URL + path, { method: 'POST', body: form });
   if (!res.ok) throw new Error(`UPLOAD ${path} ${res.status}`);
 }
+export async function apiPut<T>(path: string, body: any): Promise<T> {
+  const res = await fetch(API_URL + path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`PUT ${path} ${res.status}`);
+  return res.json();
+}
+export async function apiDelete<T = { success: boolean }>(path: string): Promise<T> {
+  const res = await fetch(API_URL + path, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`DELETE ${path} ${res.status}`);
+  return res.json();
+}
