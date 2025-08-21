@@ -21,7 +21,6 @@ interface EnhancedNavigationProps {
 
 const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout }) => {
   const location = useLocation();
-
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
@@ -35,12 +34,9 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-900/90 backdrop-blur-xl border-b border-purple-500/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand */}
         <Link to="/" className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 via-pink-600 to-cyan-600 rounded-xl flex items-center justify-center">
-              <BookOpen className="h-6 w-6 text-white" />
-            </div>
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-600 via-pink-600 to-cyan-600 rounded-xl flex items-center justify-center">
+            <BookOpen className="h-6 w-6 text-white" />
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Zilliance</span>
@@ -50,7 +46,6 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
           </div>
         </Link>
 
-        {/* Nav */}
         <div className="hidden lg:flex items-center gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -61,7 +56,6 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
                   size="sm"
                   className={`px-4 py-2 rounded-xl ${isActive(item.path) ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'text-purple-200 hover:text-purple-400 hover:bg-purple-900/30'}`}
                   onMouseEnter={() => {
-                    // Hover prefetch for heavy routes
                     if (item.path === '/tutorial-builder') import('@/pages/TutorialBuilder').catch(() => {});
                     if (item.path === '/reports') import('@/pages/Reports').catch(() => {});
                   }}
@@ -74,7 +68,6 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
           })}
         </div>
 
-        {/* User */}
         <div className="flex items-center gap-2">
           {user ? (
             <>

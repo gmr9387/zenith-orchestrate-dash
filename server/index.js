@@ -172,6 +172,30 @@ app.get('/api/tutorials/:id/media', (req, res) => {
   fs.createReadStream(m.path).pipe(res);
 });
 
+// Basic Workflow CRUD in-memory for demo
+let workflows = [];
+app.get('/api/workflows', (_req, res) => {
+  res.json({ success: true, message: 'ok', data: workflows });
+});
+app.post('/api/workflows', (req, res) => {
+  const { name, description } = req.body || {};
+  const wf = { id: nanoid(), name: String(name||'Untitled'), description: String(description||''), nodes: [], isActive: false, lastRun: null, runCount: 0, successRate: 100, createdAt: Date.now(), updatedAt: Date.now() };
+  workflows.unshift(wf);
+  res.json({ success: true, message: 'created', data: wf });
+});
+app.put('/api/workflows/:id', (req, res) => {
+  const idx = workflows.findIndex(w => w.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'not_found' });
+  workflows[idx] = { ...workflows[idx], ...req.body, updatedAt: Date.now() };
+  res.json({ success: true, message: 'updated', data: workflows[idx] });
+});
+app.delete('/api/workflows/:id', (req, res) => {
+  const before = workflows.length;
+  workflows = workflows.filter(w => w.id !== req.params.id);
+  if (workflows.length === before) return res.status(404).json({ success: false, message: 'not_found' });
+  res.json({ success: true, message: 'deleted' });
+});
+
 // Serve frontend build with strong caching for assets
 const distDir = path.join(__dirnameLocal, 'dist');
 if (fs.existsSync(distDir)) {

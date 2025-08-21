@@ -30,6 +30,7 @@ class AppDB extends Dexie {
   tutorials!: Table<TutorialDoc, string>;
   steps!: Table<TutorialStep, number>;
   media!: Table<TutorialMedia, string>;
+  workflows!: Table<any, string>;
   constructor() {
     super("zilliance-app");
     this.version(1).stores({
@@ -40,6 +41,12 @@ class AppDB extends Dexie {
       tutorials: "id, updatedAt, createdAt, title",
       steps: "++id, tutorialId, ts",
       media: "id",
+    });
+    this.version(3).stores({
+      tutorials: "id, updatedAt, createdAt, title",
+      steps: "++id, tutorialId, ts",
+      media: "id",
+      workflows: "id, updatedAt, createdAt, name",
     });
   }
 }
