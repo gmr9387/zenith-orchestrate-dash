@@ -959,7 +959,8 @@ async function processVideoAsync(videoId, originalPath, userId) {
     }
     const videoProcessor = new VideoProcessor({
       outputDir: path.join(dataDir, 'processed-videos'),
-      thumbnailDir: path.join(dataDir, 'thumbnails')
+      thumbnailDir: path.join(dataDir, 'thumbnails'),
+      hlsDir: path.join(dataDir, 'hls')
     });
 
     // Process video
@@ -970,7 +971,11 @@ async function processVideoAsync(videoId, originalPath, userId) {
     });
 
     // Update database with results
-    const processedPaths = JSON.stringify(result.processed);
+    const processed = { ...result.processed };
+    if (result.hls) {
+      processed['hls'] = { manifestPath: result.hls.manifestPath, baseDir: result.hls.baseDir };
+    }
+    const processedPaths = JSON.stringify(processed);
     const thumbnailPaths = JSON.stringify(result.thumbnails.map(t => t.path));
     const metadata = JSON.stringify(result.metadata);
 
@@ -1188,6 +1193,7 @@ app.use('/api/app-builder', appBuilder.getRouter());
 app.use('/uploads', express.static(storageDir));
 app.use('/thumbnails', express.static(path.join(dataDir, 'thumbnails')));
 app.use('/processed-videos', express.static(path.join(dataDir, 'processed-videos')));
+app.use('/hls', express.static(path.join(dataDir, 'hls')));
 app.use('/apps', express.static(path.join(dataDir, 'generated-apps')));
 
 // Admin routes
