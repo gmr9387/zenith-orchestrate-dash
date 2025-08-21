@@ -24,6 +24,14 @@ import WorkflowEngine from './workflow-engine.js';
 import VideoQueue from './video-queue.js';
 import StorageManager from './storage-manager.js';
 
+// Import advanced features
+import VideoAI from './video-ai.js';
+import VideoAnalytics from './video-analytics.js';
+import WorkflowIntegrations from './workflow-integrations.js';
+import WorkflowTemplates from './workflow-templates.js';
+import AdvancedCRM from './crm-advanced.js';
+import AdvancedAppBuilder from './app-builder-advanced.js';
+
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -229,10 +237,20 @@ const apiGateway = new ApiGateway(db, {
 });
 
 const crmSystem = new CRMSystem(db, {});
+const advancedCRM = new AdvancedCRM(db);
 
 const appBuilder = new AppBuilder(db, {});
+const advancedAppBuilder = new AdvancedAppBuilder(db);
 
 const workflowEngine = new WorkflowEngine(db);
+
+// Initialize advanced features
+const videoAI = new VideoAI({
+  openaiApiKey: process.env.OPENAI_API_KEY
+});
+const videoAnalytics = new VideoAnalytics(db);
+const workflowIntegrations = new WorkflowIntegrations();
+const workflowTemplates = new WorkflowTemplates();
 
 const videoQueue = new VideoQueue(db, { concurrency: 2 });
 
@@ -1432,6 +1450,265 @@ app.use('/api/crm', crmSystem.getRouter());
 
 // App Builder routes
 app.use('/api/app-builder', appBuilder.getRouter());
+
+// Advanced Video Platform routes
+app.post('/api/videos/:id/ai/captions', authenticateToken, async (req, res) => {
+  try {
+    const video = getVideo.get(req.params.id);
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const captions = await videoAI.generateCaptions(video.originalPath, req.body.language || 'en');
+    res.json(captions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/videos/:id/ai/scenes', authenticateToken, async (req, res) => {
+  try {
+    const video = getVideo.get(req.params.id);
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const scenes = await videoAI.detectScenes(video.originalPath);
+    res.json(scenes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/videos/:id/ai/analyze', authenticateToken, async (req, res) => {
+  try {
+    const video = getVideo.get(req.params.id);
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const analysis = await videoAI.analyzeContent(video.originalPath);
+    res.json(analysis);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Video Analytics routes
+app.post('/api/videos/:id/analytics/track', (req, res) => {
+  try {
+    const { sessionId, eventType, eventData, timestamp } = req.body;
+    videoAnalytics.trackEngagement(req.params.id, sessionId, eventType, eventData, timestamp);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/videos/:id/analytics', authenticateToken, (req, res) => {
+  try {
+    const analytics = videoAnalytics.getVideoAnalytics(req.params.id);
+    res.json(analytics);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/videos/analytics/trending', (req, res) => {
+  try {
+    const trending = videoAnalytics.getTrendingVideos(10, req.query.period || '7d');
+    res.json(trending);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Advanced Workflow routes
+app.get('/api/workflows/integrations', authenticateToken, (req, res) => {
+  try {
+    const categories = workflowIntegrations.getIntegrationsByCategory();
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/workflows/integrations/search', authenticateToken, (req, res) => {
+  try {
+    const results = workflowIntegrations.searchIntegrations(req.query.q || '');
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/workflows/templates', authenticateToken, (req, res) => {
+  try {
+    const templates = workflowTemplates.getAllTemplates();
+    res.json(templates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/workflows/templates/:id', authenticateToken, (req, res) => {
+  try {
+    const template = workflowTemplates.getTemplate(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    res.json(template);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/workflows/templates/:id/create', authenticateToken, (req, res) => {
+  try {
+    const workflow = workflowTemplates.createWorkflowFromTemplate(
+      req.params.id, 
+      req.user.id, 
+      req.body.customizations || {}
+    );
+    res.json(workflow);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Advanced CRM routes
+app.get('/api/crm/advanced/dashboard', authenticateToken, (req, res) => {
+  try {
+    const stats = advancedCRM.getDashboardStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/crm/advanced/pipeline', authenticateToken, (req, res) => {
+  try {
+    const pipeline = advancedCRM.getPipelineStats();
+    res.json(pipeline);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/crm/advanced/contacts', authenticateToken, (req, res) => {
+  try {
+    const contact = advancedCRM.createContact(req.body);
+    res.json(contact);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/crm/advanced/contacts', authenticateToken, (req, res) => {
+  try {
+    const contacts = advancedCRM.searchContacts(req.query.q, req.query.filters);
+    res.json(contacts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/crm/advanced/deals', authenticateToken, (req, res) => {
+  try {
+    const deal = advancedCRM.createDeal(req.body);
+    res.json(deal);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/crm/advanced/campaigns', authenticateToken, (req, res) => {
+  try {
+    const campaign = advancedCRM.createCampaign(req.body);
+    res.json(campaign);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/crm/advanced/campaigns/:id/send', authenticateToken, (req, res) => {
+  try {
+    const campaign = advancedCRM.sendCampaign(req.params.id);
+    res.json(campaign);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Advanced App Builder routes
+app.get('/api/app-builder/advanced/templates', authenticateToken, (req, res) => {
+  try {
+    const templates = advancedAppBuilder.getTemplates(req.query.category);
+    res.json(templates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/app-builder/advanced/templates/:id/create', authenticateToken, (req, res) => {
+  try {
+    const project = advancedAppBuilder.createProjectFromTemplate(
+      req.params.id,
+      { ...req.body, createdBy: req.user.id }
+    );
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/app-builder/advanced/projects', authenticateToken, (req, res) => {
+  try {
+    const project = advancedAppBuilder.createProject({
+      ...req.body,
+      createdBy: req.user.id
+    });
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/app-builder/advanced/projects', authenticateToken, (req, res) => {
+  try {
+    const projects = advancedAppBuilder.getUserProjects(req.user.id);
+    res.json(projects);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/app-builder/advanced/projects/:id/build', authenticateToken, (req, res) => {
+  try {
+    const build = advancedAppBuilder.buildProject(req.params.id);
+    res.json(build);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/app-builder/advanced/projects/:id/deploy', authenticateToken, (req, res) => {
+  try {
+    const deployment = advancedAppBuilder.deployProject(req.params.id, req.body.platform);
+    res.json(deployment);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/app-builder/advanced/projects/:id/code', authenticateToken, (req, res) => {
+  try {
+    const code = advancedAppBuilder.generateCode(req.params.id);
+    res.json(code);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Serve static files
 app.use('/uploads', express.static(storageDir));
