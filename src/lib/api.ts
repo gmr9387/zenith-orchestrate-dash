@@ -192,6 +192,16 @@ export async function apiPost<T>(path: string, body: any): Promise<T> {
   if (!res.ok) throw new Error(`POST ${path} ${res.status}`);
   return res.json();
 }
+export async function apiPut<T>(path: string, body: any): Promise<T> {
+  const res = await fetch(API_URL + path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`PUT ${path} ${res.status}`);
+  return res.json();
+}
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(API_URL + path, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`DELETE ${path} ${res.status}`);
+  return res.json();
+}
 export async function apiUpload(path: string, file: Blob, field = 'file'): Promise<void> {
   const form = new FormData();
   form.append(field, file);

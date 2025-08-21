@@ -1,6 +1,7 @@
 // Simple backend API for tutorials and workflows: Express + SQLite + file storage
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import multer from 'multer';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
@@ -9,17 +10,57 @@ import sqlite3 from 'better-sqlite3';
 import { z } from 'zod';
 
 const PORT = process.env.PORT || 4000;
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const app = express();
-app.use(cors());
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// Disable x-powered-by
+app.disable('x-powered-by');
+
+// CORS with strict origin
+app.use(cors({
+  origin: ALLOWED_ORIGIN,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json({ limit: '5mb' }));
 
-// Simple request logging
+// Request ID middleware
+app.use((req, res, next) => {
+  req.id = nanoid(8);
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
+
+// Structured request logging
 app.use((req, res, next) => {
 	const start = Date.now();
 	res.on('finish', () => {
 		const ms = Date.now() - start;
+		const log = {
+			id: req.id,
+			method: req.method,
+			url: req.originalUrl,
+			status: res.statusCode,
+			duration: ms,
+			ip: req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || req.socket.remoteAddress || 'unknown',
+			userAgent: req.headers['user-agent']?.substring(0, 100),
+		};
 		// eslint-disable-next-line no-console
-		console.log(`${req.method} ${req.originalUrl} -> ${res.statusCode} ${ms}ms`);
+		console.log(JSON.stringify(log));
 	});
 	next();
 });
@@ -40,7 +81,13 @@ app.use((req, res, next) => {
 		entry.count++;
 		ipCounters.set(ip, entry);
 		if (entry.count > MAX_REQUESTS) {
-			return res.status(429).json({ error: { code: 'rate_limited', message: 'Too many requests. Please try again later.' } });
+			return res.status(429).json({ 
+				error: { 
+					code: 'rate_limited', 
+					message: 'Too many requests. Please try again later.',
+					requestId: req.id
+				} 
+			});
 		}
 		next();
 	} catch (e) {
@@ -74,6 +121,7 @@ db.exec(`
     title TEXT,
     FOREIGN KEY (tutorialId) REFERENCES tutorials(id) ON DELETE CASCADE
   );
+  CREATE INDEX IF NOT EXISTS idx_steps_tutorial_ts ON steps(tutorialId, ts);
   CREATE TABLE IF NOT EXISTS media (
     tutorialId TEXT PRIMARY KEY,
     mimeType TEXT NOT NULL,
@@ -157,7 +205,13 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 // Tutorials
 app.post('/api/tutorials', (req, res) => {
 	const parsed = TutorialCreateSchema.safeParse(req.body);
-	if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+	if (!parsed.success) return res.status(400).json({ 
+		error: { 
+			code: 'invalid_request', 
+			message: parsed.error.message,
+			requestId: req.id
+		} 
+	});
 	const { title } = parsed.data;
 	const id = nanoid();
 	const now = Date.now();
@@ -172,17 +226,35 @@ app.get('/api/tutorials', (_req, res) => {
 
 app.get('/api/tutorials/:id', (req, res) => {
 	const t = getTutorial.get(req.params.id);
-	if (!t) return res.status(404).json({ error: 'not_found' });
+	if (!t) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Tutorial not found',
+			requestId: req.id
+		} 
+	});
 	const steps = listSteps.all(req.params.id);
 	res.json({ ...t, steps });
 });
 
 app.post('/api/tutorials/:id/steps', (req, res) => {
 	const t = getTutorial.get(req.params.id);
-	if (!t) return res.status(404).json({ error: 'not_found' });
+	if (!t) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Tutorial not found',
+			requestId: req.id
+		} 
+	});
 	const stepsBody = Array.isArray(req.body?.steps) ? req.body.steps : [];
 	const parsed = z.array(StepSchema).safeParse(stepsBody);
-	if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+	if (!parsed.success) return res.status(400).json({ 
+		error: { 
+			code: 'invalid_request', 
+			message: parsed.error.message,
+			requestId: req.id
+		} 
+	});
 	const insert = db.transaction((items) => {
 		for (const s of items) insertStep.run(req.params.id, s.ts, s.kind, s.selector ?? null, s.key ?? null, s.title ?? null);
 		const count = listSteps.all(req.params.id).length;
@@ -196,8 +268,20 @@ app.post('/api/tutorials/:id/steps', (req, res) => {
 const upload = multer({ dest: storageDir, limits: { fileSize: 100 * 1024 * 1024 } });
 app.post('/api/tutorials/:id/media', upload.single('file'), (req, res) => {
 	const t = getTutorial.get(req.params.id);
-	if (!t) return res.status(404).json({ error: 'not_found' });
-	if (!req.file) return res.status(400).json({ error: 'file_required' });
+	if (!t) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Tutorial not found',
+			requestId: req.id
+		} 
+	});
+	if (!req.file) return res.status(400).json({ 
+		error: { 
+			code: 'file_required', 
+			message: 'No file uploaded',
+			requestId: req.id
+		} 
+	});
 	const filePath = path.join(storageDir, `${req.params.id}-${Date.now()}`);
 	fs.renameSync(req.file.path, filePath);
 	upsertMedia.run(req.params.id, req.file.mimetype || 'application/octet-stream', filePath, req.file.size, Date.now());
@@ -209,20 +293,60 @@ app.head('/api/tutorials/:id/media', (req, res) => {
 	const m = getMedia.get(req.params.id);
 	if (!m) return res.status(404).end();
 	res.setHeader('Content-Type', m.mimeType);
+	res.setHeader('Content-Length', m.size);
+	res.setHeader('ETag', `"${m.tutorialId}-${m.createdAt}"`);
+	res.setHeader('Cache-Control', 'public, max-age=3600');
 	res.status(200).end();
 });
 
 app.get('/api/tutorials/:id/media', (req, res) => {
 	const m = getMedia.get(req.params.id);
-	if (!m) return res.status(404).json({ error: 'not_found' });
-	res.setHeader('Content-Type', m.mimeType);
-	fs.createReadStream(m.path).pipe(res);
+	if (!m) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Media not found',
+			requestId: req.id
+		} 
+	});
+	
+	// Basic Range request support
+	const range = req.headers.range;
+	if (range) {
+		const parts = range.replace(/bytes=/, "").split("-");
+		const start = parseInt(parts[0], 10);
+		const end = parts[1] ? parseInt(parts[1], 10) : m.size - 1;
+		const chunksize = (end - start) + 1;
+		
+		res.writeHead(206, {
+			'Content-Range': `bytes ${start}-${end}/${m.size}`,
+			'Accept-Ranges': 'bytes',
+			'Content-Length': chunksize,
+			'Content-Type': m.mimeType,
+			'ETag': `"${m.tutorialId}-${m.createdAt}"`,
+			'Cache-Control': 'public, max-age=3600',
+		});
+		
+		const stream = fs.createReadStream(m.path, { start, end });
+		stream.pipe(res);
+	} else {
+		res.setHeader('Content-Type', m.mimeType);
+		res.setHeader('Content-Length', m.size);
+		res.setHeader('ETag', `"${m.tutorialId}-${m.createdAt}"`);
+		res.setHeader('Cache-Control', 'public, max-age=3600');
+		fs.createReadStream(m.path).pipe(res);
+	}
 });
 
 // Workflows CRUD
 app.post('/api/workflows', (req, res) => {
 	const parsed = WorkflowCreateSchema.safeParse(req.body);
-	if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+	if (!parsed.success) return res.status(400).json({ 
+		error: { 
+			code: 'invalid_request', 
+			message: parsed.error.message,
+			requestId: req.id
+		} 
+	});
 	const id = nanoid();
 	const nowIso = new Date().toISOString();
 	insertWorkflow.run(id, parsed.data.name, parsed.data.description ?? '', 0, JSON.stringify([]), null, 0, 100, nowIso, nowIso);
@@ -238,15 +362,33 @@ app.get('/api/workflows', (_req, res) => {
 
 app.get('/api/workflows/:id', (req, res) => {
 	const r = getWorkflow.get(req.params.id);
-	if (!r) return res.status(404).json({ error: 'not_found' });
+	if (!r) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Workflow not found',
+			requestId: req.id
+		} 
+	});
 	res.json({ ...r, isActive: Boolean(r.isActive), nodes: JSON.parse(r.nodes || '[]') });
 });
 
 app.put('/api/workflows/:id', (req, res) => {
 	const existing = getWorkflow.get(req.params.id);
-	if (!existing) return res.status(404).json({ error: 'not_found' });
+	if (!existing) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Workflow not found',
+			requestId: req.id
+		} 
+	});
 	const parsed = WorkflowUpdateSchema.safeParse(req.body);
-	if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+	if (!parsed.success) return res.status(400).json({ 
+		error: { 
+			code: 'invalid_request', 
+			message: parsed.error.message,
+			requestId: req.id
+		} 
+	});
 	const updates = parsed.data;
 	const name = updates.name ?? existing.name;
 	const description = updates.description ?? existing.description ?? '';
@@ -263,7 +405,13 @@ app.put('/api/workflows/:id', (req, res) => {
 
 app.delete('/api/workflows/:id', (req, res) => {
 	const r = getWorkflow.get(req.params.id);
-	if (!r) return res.status(404).json({ error: 'not_found' });
+	if (!r) return res.status(404).json({ 
+		error: { 
+			code: 'not_found', 
+			message: 'Workflow not found',
+			requestId: req.id
+		} 
+	});
 	deleteWorkflow.run(req.params.id);
 	res.json({ ok: true });
 });
@@ -273,7 +421,13 @@ app.delete('/api/workflows/:id', (req, res) => {
 app.use((err, _req, res, _next) => {
 	// eslint-disable-next-line no-console
 	console.error('Unhandled error', err);
-	res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong' } });
+	res.status(500).json({ 
+		error: { 
+			code: 'internal_error', 
+			message: 'Something went wrong',
+			requestId: _req.id
+		} 
+	});
 });
 
 if (process.env.NODE_ENV !== 'test') {

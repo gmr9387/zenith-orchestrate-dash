@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, Suspense } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Skeleton } from './ui/skeleton';
 import { 
   Play, 
   Pause, 
@@ -57,7 +58,9 @@ import {
   Award,
   Star,
   Crown,
-  List
+  List,
+  Folder,
+  X
 } from 'lucide-react';
 
 interface VideoAsset {
@@ -111,7 +114,7 @@ interface VideoCollection {
   updatedAt: string;
 }
 
-const VideoPlatform: React.FC = () => {
+const VideoPlatformContent: React.FC = () => {
   const [videos, setVideos] = useState<VideoAsset[]>([]);
   const [collections, setCollections] = useState<VideoCollection[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoAsset | null>(null);
@@ -125,6 +128,7 @@ const VideoPlatform: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [sortBy, setSortBy] = useState('uploadDate');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isLoading, setIsLoading] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,15 +210,19 @@ const VideoPlatform: React.FC = () => {
           },
           geographicData: [
             { country: 'United States', views: 3100, percentage: 34.8 },
-            { country: 'India', views: 1800, percentage: 20.2 },
-            { country: 'Brazil', views: 1200, percentage: 13.5 },
-            { country: 'France', views: 800, percentage: 9.0 },
+            { country: 'United Kingdom', views: 1200, percentage: 13.5 },
+            { country: 'Canada', views: 900, percentage: 10.1 },
+            { country: 'Australia', views: 800, percentage: 9.0 },
           ]
         }
       }
     ];
 
-    setVideos(mockVideos);
+    // Simulate loading
+    setTimeout(() => {
+      setVideos(mockVideos);
+      setIsLoading(false);
+    }, 1000);
   }, []);
 
   const formatDuration = (seconds: number) => {
@@ -228,61 +236,18 @@ const VideoPlatform: React.FC = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatFileSize = (sizeInMB: number) => {
-    if (sizeInMB >= 1024) {
-      return `${(sizeInMB / 1024).toFixed(1)} GB`;
-    }
-    return `${sizeInMB.toFixed(1)} MB`;
+  const formatFileSize = (bytes: number) => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
   };
 
-  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    const newVideo: VideoAsset = {
-      id: `video_${Date.now()}`,
-      title: file.name.replace(/\.[^/.]+$/, ''),
-      description: '',
-      duration: 0,
-      thumbnailUrl: 'https://via.placeholder.com/320x180/6B7280/FFFFFF?text=Processing',
-      videoUrl: URL.createObjectURL(file),
-      quality: '1080p',
-      format: file.name.split('.').pop()?.toUpperCase() as any || 'MP4',
-      size: file.size / (1024 * 1024),
-      status: 'uploading',
-      uploadDate: new Date().toISOString(),
-      views: 0,
-      likes: 0,
-      dislikes: 0,
-      comments: 0,
-      shares: 0,
-      category: 'Technology',
-      tags: [],
-      isPublic: false,
-      isMonetized: false,
-      revenue: 0,
-      analytics: {
-        watchTime: 0,
-        engagementRate: 0,
-        retentionRate: 0,
-        deviceBreakdown: { desktop: 0, mobile: 0, tablet: 0, tv: 0 },
-        geographicData: []
-      }
-    };
-
-    setVideos(prev => [newVideo, ...prev]);
-    setShowUploadModal(false);
-
-    // Simulate processing
-    setTimeout(() => {
-      setVideos(prev => prev.map(v => 
-        v.id === newVideo.id ? { ...v, status: 'ready' } : v
-      ));
-    }, 3000);
+  const handleVideoSelect = (video: VideoAsset) => {
+    setSelectedVideo(video);
+    setIsPlaying(false);
+    setCurrentTime(0);
   };
 
-  const togglePlayPause = () => {
+  const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -299,8 +264,8 @@ const VideoPlatform: React.FC = () => {
     }
   };
 
-  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(event.target.value);
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
     if (videoRef.current) {
       videoRef.current.currentTime = time;
       setCurrentTime(time);
@@ -314,36 +279,86 @@ const VideoPlatform: React.FC = () => {
     }
   };
 
-  const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(event.target.value);
-    setVolume(newVolume);
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
     if (videoRef.current) {
-      videoRef.current.volume = newVolume;
+      videoRef.current.volume = vol;
+      setVolume(vol);
     }
   };
 
-  const filteredVideos = videos.filter(video => {
-    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         video.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         video.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesCategory = !filterCategory || video.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const sortedVideos = [...filteredVideos].sort((a, b) => {
-    switch (sortBy) {
-      case 'uploadDate':
-        return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
-      case 'views':
-        return b.views - a.views;
-      case 'likes':
-        return b.likes - a.likes;
-      case 'duration':
-        return b.duration - a.duration;
-      default:
-        return 0;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Handle file upload logic here
+      console.log('File selected:', file.name);
     }
-  });
+  };
+
+  const renderVideoCard = (video: VideoAsset) => (
+    <Card key={video.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+      <div className="relative">
+        <img
+          src={video.thumbnailUrl}
+          alt={video.title}
+          className="w-full h-48 object-cover"
+        />
+        <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="opacity-0 hover:opacity-100 transition-opacity"
+            onClick={() => handleVideoSelect(video)}
+          >
+            <Play className="h-4 w-4 mr-1" />
+            Play
+          </Button>
+        </div>
+        <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+          {formatDuration(video.duration)}
+        </div>
+        <div className="absolute top-2 left-2">
+          <Badge variant={video.status === 'ready' ? 'default' : 'secondary'}>
+            {video.status}
+          </Badge>
+        </div>
+      </div>
+      
+      <CardContent className="p-4">
+        <h3 className="font-semibold text-sm mb-2 line-clamp-2">{video.title}</h3>
+        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{video.description}</p>
+        
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+          <span>{video.views.toLocaleString()} views</span>
+          <span>{video.uploadDate}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{video.category}</Badge>
+          <Badge variant="outline" className="text-xs">{video.quality}</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderSkeletons = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Card key={i} className="overflow-hidden">
+          <Skeleton className="w-full h-48" />
+          <CardContent className="p-4">
+            <Skeleton className="h-4 w-3/4 mb-2" />
+            <Skeleton className="h-3 w-full mb-2" />
+            <Skeleton className="h-3 w-2/3 mb-3" />
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-16" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -352,21 +367,14 @@ const VideoPlatform: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold mb-2">Video Platform</h1>
           <p className="text-muted-foreground">
-            Professional video hosting, streaming, and analytics platform
+            Professional video hosting and streaming platform with enterprise features
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setShowAnalytics(!showAnalytics)}>
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Analytics
-          </Button>
-          
-          <Button onClick={() => setShowUploadModal(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Video
-          </Button>
-        </div>
+        <Button onClick={() => setShowUploadModal(true)}>
+          <Upload className="mr-2 h-4 w-4" />
+          Upload Video
+        </Button>
       </div>
 
       {/* Stats Overview */}
@@ -379,7 +387,7 @@ const VideoPlatform: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{videos.length}</div>
             <p className="text-xs text-muted-foreground">
-              {videos.filter(v => v.status === 'ready').length} ready
+              +15 from last month
             </p>
           </CardContent>
         </Card>
@@ -394,7 +402,7 @@ const VideoPlatform: React.FC = () => {
               {videos.reduce((sum, v) => sum + v.views, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Across all videos
+              +12% from last month
             </p>
           </CardContent>
         </Card>
@@ -409,369 +417,189 @@ const VideoPlatform: React.FC = () => {
               ${videos.reduce((sum, v) => sum + v.revenue, 0).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
-              This month
+              +8% from last month
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Collections</CardTitle>
+            <Folder className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {videos.length > 0 
-                ? Math.round(videos.reduce((sum, v) => sum + v.analytics.engagementRate, 0) / videos.length)
-                : 0}%
-            </div>
+            <div className="text-2xl font-bold">{collections.length}</div>
             <p className="text-xs text-muted-foreground">
-              Average across videos
+              +3 from last month
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Video Player */}
-        <div className="lg:col-span-2">
-          {selectedVideo ? (
-            <Card>
-              <CardContent className="p-0">
-                {/* Video Player */}
-                <div className="relative bg-black rounded-t-lg">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-auto max-h-[500px]"
-                    poster={selectedVideo.thumbnailUrl}
-                    onTimeUpdate={handleTimeUpdate}
-                    onEnded={() => setIsPlaying(false)}
-                  >
-                    <source src={selectedVideo.videoUrl} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                  
-                  {/* Custom Video Controls */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                    {/* Progress Bar */}
-                    <div className="mb-3">
-                      <input
-                        type="range"
-                        min="0"
-                        max={selectedVideo.duration}
-                        value={currentTime}
-                        onChange={handleSeek}
-                        className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                      />
-                    </div>
-                    
-                    {/* Control Buttons */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={togglePlayPause}
-                          className="text-white hover:bg-white/20"
-                        >
-                          {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                        </Button>
-                        
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={toggleMute}
-                          className="text-white hover:bg-white/20"
-                        >
-                          {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                        </Button>
-                        
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={volume}
-                          onChange={handleVolumeChange}
-                          className="w-20 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                        />
-                        
-                        <span className="text-white text-sm">
-                          {formatDuration(currentTime)} / {formatDuration(selectedVideo.duration)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-white hover:bg-white/20"
-                        >
-                          <Maximize2 className="h-5 w-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Video Info */}
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h2 className="text-2xl font-bold mb-2">{selectedVideo.title}</h2>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                        <span>{selectedVideo.views.toLocaleString()} views</span>
-                        <span>•</span>
-                        <span>{new Date(selectedVideo.uploadDate).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span>{selectedVideo.category}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
-                        <Heart className="mr-2 h-4 w-4" />
-                        {selectedVideo.likes}
-                      </Button>
-                      
-                      <Button variant="outline" size="sm">
-                        <ThumbsDown className="mr-2 h-4 w-4" />
-                        {selectedVideo.dislikes}
-                      </Button>
-                      
-                      <Button variant="outline" size="sm">
-                        <Share2 className="mr-2 h-4 w-4" />
-                        Share
-                      </Button>
-                      
-                      <Button variant="outline" size="sm">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <p className="text-muted-foreground mb-4">{selectedVideo.description}</p>
-                  
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {selectedVideo.tags.map(tag => (
-                      <Badge key={tag} variant="secondary">
-                        #{tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  
-                  {/* Video Details */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Quality:</span>
-                      <div className="font-medium">{selectedVideo.quality}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Format:</span>
-                      <div className="font-medium">{selectedVideo.format}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Size:</span>
-                      <div className="font-medium">{formatFileSize(selectedVideo.size)}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Duration:</span>
-                      <div className="font-medium">{formatDuration(selectedVideo.duration)}</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="text-center py-16">
-                <Video className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Select a Video</h3>
-                <p className="text-muted-foreground">
-                  Choose a video from the library to start watching
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Video Library */}
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Video Library</CardTitle>
-              <CardDescription>
-                Manage and organize your video content
-              </CardDescription>
-            </CardHeader>
+      {/* Search and Filters */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Search videos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
             
-            <CardContent className="space-y-4">
-              {/* Search and Filters */}
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search videos..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                
-                <div className="flex gap-2">
-                  <Select value={filterCategory} onValueChange={setFilterCategory}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="All categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">All categories</SelectItem>
-                      <SelectItem value="Technology">Technology</SelectItem>
-                      <SelectItem value="Design">Design</SelectItem>
-                      <SelectItem value="Business">Business</SelectItem>
-                      <SelectItem value="Education">Education</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="uploadDate">Date</SelectItem>
-                      <SelectItem value="views">Views</SelectItem>
-                      <SelectItem value="likes">Likes</SelectItem>
-                      <SelectItem value="duration">Duration</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button
-                    variant={viewMode === 'grid' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    <Square className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Video List */}
-              <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                {sortedVideos.map(video => (
-                  <div
-                    key={video.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      selectedVideo?.id === video.id 
-                        ? 'border-primary bg-primary/5' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => setSelectedVideo(video)}
-                  >
-                    <div className="flex gap-3">
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={video.thumbnailUrl}
-                          alt={video.title}
-                          className="w-20 h-12 object-cover rounded"
-                        />
-                        <div className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 rounded">
-                          {formatDuration(video.duration)}
-                        </div>
-                        {video.status === 'processing' && (
-                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm line-clamp-2 mb-1">
-                          {video.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                          {video.description}
-                        </p>
-                        
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>{video.views.toLocaleString()} views</span>
-                          <span>•</span>
-                          <span>{video.likes} likes</span>
-                          <span>•</span>
-                          <span>{new Date(video.uploadDate).toLocaleDateString()}</span>
-                        </div>
-                        
-                        {video.isMonetized && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <DollarSign className="h-3 w-3 text-green-600" />
-                            <span className="text-xs text-green-600 font-medium">
-                              ${video.revenue.toFixed(2)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="technology">Technology</SelectItem>
+                <SelectItem value="design">Design</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
+                <SelectItem value="education">Education</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="uploadDate">Upload Date</SelectItem>
+                <SelectItem value="views">Most Views</SelectItem>
+                <SelectItem value="duration">Duration</SelectItem>
+                <SelectItem value="title">Title</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            >
+              {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Video Grid */}
+      <div>
+        {isLoading ? (
+          renderSkeletons()
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {videos.map(renderVideoCard)}
+          </div>
+        )}
       </div>
 
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background p-6 rounded-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Upload Video</h2>
+      {/* Video Player Modal */}
+      {selectedVideo && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-4xl w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">{selectedVideo.title}</h2>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedVideo(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-8 text-center">
-                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop your video file here, or click to browse
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Choose File
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/*"
-                  onChange={handleVideoUpload}
-                  className="hidden"
-                />
-              </div>
+            <div className="relative mb-4">
+              <video
+                ref={videoRef}
+                src={selectedVideo.videoUrl}
+                className="w-full rounded-lg"
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={() => setIsPlaying(false)}
+              />
               
-              <div className="text-xs text-muted-foreground">
-                <p>Supported formats: MP4, WebM, MOV, AVI</p>
-                <p>Maximum file size: 10 GB</p>
-                <p>Maximum resolution: 4K</p>
+              {/* Custom Controls */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="sm" onClick={togglePlay}>
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  
+                  <input
+                    type="range"
+                    min="0"
+                    max={selectedVideo.duration}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="flex-1"
+                  />
+                  
+                  <span className="text-white text-sm">
+                    {formatDuration(currentTime)} / {formatDuration(selectedVideo.duration)}
+                  </span>
+                  
+                  <Button variant="ghost" size="sm" onClick={toggleMute}>
+                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </Button>
+                  
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-20"
+                  />
+                </div>
               </div>
             </div>
             
-            <div className="flex justify-end mt-6">
-              <Button variant="outline" onClick={() => setShowUploadModal(false)}>
-                Cancel
+            <div className="flex items-center gap-4">
+              <Button>
+                <Heart className="mr-2 h-4 w-4" />
+                Like
+              </Button>
+              <Button variant="outline">
+                <Share2 className="mr-2 h-4 w-4" />
+                Share
+              </Button>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Download
               </Button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+};
+
+const VideoPlatform: React.FC = () => {
+  return (
+    <Suspense fallback={
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-8 w-16 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    }>
+      <VideoPlatformContent />
+    </Suspense>
   );
 };
 

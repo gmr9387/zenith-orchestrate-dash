@@ -59,4 +59,42 @@ describe('API server', () => {
     expect(del.status).toBe(200);
     expect(del.body).toMatchObject({ ok: true });
   });
+
+  it('validates tutorial creation', async () => {
+    const res = await request(app).post('/api/tutorials').send({ title: '' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('invalid_request');
+    expect(res.body.error.requestId).toBeTruthy();
+  });
+
+  it('validates workflow creation', async () => {
+    const res = await request(app).post('/api/workflows').send({ name: '' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('invalid_request');
+    expect(res.body.error.requestId).toBeTruthy();
+  });
+
+  it('returns 404 for non-existent resources', async () => {
+    const res = await request(app).get('/api/tutorials/nonexistent');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('not_found');
+    expect(res.body.error.requestId).toBeTruthy();
+  });
+
+  it('returns 404 for non-existent routes', async () => {
+    const res = await request(app).get('/api/nonexistent');
+    expect(res.status).toBe(404);
+    // Express default 404 doesn't have our custom error format
+    expect(res.body).toBeDefined();
+  });
+
+  it('includes request ID in responses', async () => {
+    const res = await request(app).get('/api/health');
+    expect(res.headers['x-request-id']).toBeTruthy();
+  });
+
+  it('handles media HEAD requests', async () => {
+    const res = await request(app).head('/api/tutorials/nonexistent/media');
+    expect(res.status).toBe(404);
+  });
 });
