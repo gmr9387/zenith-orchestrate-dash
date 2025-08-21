@@ -11,6 +11,12 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+// Import video processor, API gateway, CRM system, and App Builder
+import VideoProcessor from './video-processor.js';
+import ApiGateway from './api-gateway.js';
+import CRMSystem from './crm.js';
+import AppBuilder from './app-builder.js';
+
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -205,6 +211,44 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_workflows_deleted_at ON workflows(deletedAt);
 `);
 
+// Initialize API gateway
+const apiGateway = new ApiGateway(db, {
+  maxRequestsPerMinute: 100,
+  maxRequestsPerHour: 1000
+});
+
+const crmSystem = new CRMSystem(db, {});
+
+const appBuilder = new AppBuilder(db, {});
+
+// Enhanced video database schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    originalPath TEXT NOT NULL,
+    processedPaths TEXT, -- JSON object with quality:path mappings
+    thumbnailPaths TEXT, -- JSON array of thumbnail paths
+    metadata TEXT, -- JSON object with video metadata
+    duration REAL,
+    size INTEGER,
+    status TEXT NOT NULL DEFAULT 'processing', -- processing, completed, failed
+    processingProgress INTEGER DEFAULT 0,
+    createdBy TEXT NOT NULL,
+    isPublic INTEGER NOT NULL DEFAULT 0,
+    views INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    deletedAt TEXT,
+    FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE
+  );
+  
+  CREATE INDEX IF NOT EXISTS idx_videos_created_by ON videos(createdBy);
+  CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
+  CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(createdAt);
+`);
+
 // Prepared statements for users
 const insertUser = db.prepare('INSERT INTO users (id, email, passwordHash, name, role, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
 const getUserByEmail = db.prepare('SELECT * FROM users WHERE email = ? AND isActive = 1');
@@ -234,6 +278,15 @@ const listWorkflowsByUser = db.prepare('SELECT * FROM workflows WHERE createdBy 
 const getWorkflow = db.prepare('SELECT * FROM workflows WHERE id = ? AND deletedAt IS NULL');
 const updateWorkflow = db.prepare('UPDATE workflows SET name = ?, description = ?, isActive = ?, nodes = ?, lastRun = ?, runCount = ?, successRate = ?, updatedAt = ? WHERE id = ?');
 const softDeleteWorkflow = db.prepare('UPDATE workflows SET deletedAt = ?, updatedAt = ? WHERE id = ?');
+
+// Video prepared statements
+const insertVideo = db.prepare('INSERT INTO videos (id, title, description, originalPath, createdBy, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+const getVideo = db.prepare('SELECT * FROM videos WHERE id = ? AND deletedAt IS NULL');
+const listVideos = db.prepare('SELECT * FROM videos WHERE deletedAt IS NULL ORDER BY createdAt DESC');
+const listVideosByUser = db.prepare('SELECT * FROM videos WHERE createdBy = ? AND deletedAt IS NULL ORDER BY createdAt DESC');
+const updateVideo = db.prepare('UPDATE videos SET title = ?, description = ?, processedPaths = ?, thumbnailPaths = ?, metadata = ?, duration = ?, size = ?, status = ?, processingProgress = ?, updatedAt = ? WHERE id = ?');
+const updateVideoViews = db.prepare('UPDATE videos SET views = views + 1 WHERE id = ?');
+const softDeleteVideo = db.prepare('UPDATE videos SET deletedAt = ?, updatedAt = ? WHERE id = ?');
 
 // Schemas
 const UserCreateSchema = z.object({
@@ -833,6 +886,291 @@ app.delete('/api/workflows/:id', authenticateToken, (req, res) => {
 	
 	res.json({ ok: true });
 });
+
+// Enhanced video upload with processing
+app.post('/api/videos/upload', authenticateToken, upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: { 
+          code: 'video_required', 
+          message: 'No video file uploaded',
+          requestId: req.id
+        } 
+      });
+    }
+
+    const { title, description, isPublic = false } = req.body;
+    const videoId = nanoid();
+    const now = new Date().toISOString();
+
+    // Save original file
+    const originalPath = path.join(storageDir, `${videoId}-original${path.extname(req.file.originalname)}`);
+    fs.renameSync(req.file.path, originalPath);
+
+    // Insert video record
+    insertVideo.run(videoId, title || 'Untitled Video', description || '', originalPath, req.user.id, now, now);
+
+    // Start processing in background
+    processVideoAsync(videoId, originalPath, req.user.id);
+
+    logAudit(req.user.id, 'video_uploaded', 'videos', videoId, { title, originalName: req.file.originalname }, req);
+
+    res.json({ 
+      id: videoId,
+      title: title || 'Untitled Video',
+      status: 'processing',
+      message: 'Video uploaded and processing started'
+    });
+  } catch (error) {
+    console.error('Video upload error:', error);
+    res.status(500).json({ 
+      error: { 
+        code: 'upload_failed', 
+        message: 'Failed to upload video',
+        requestId: req.id
+      } 
+    });
+  }
+});
+
+// Process video asynchronously
+async function processVideoAsync(videoId, originalPath, userId) {
+  try {
+    console.log(`Starting video processing for ${videoId}`);
+    
+    // Update status to processing
+    updateVideo.run(
+      'Untitled Video', '', '', '', '', 0, 0, 'processing', 0, new Date().toISOString(), videoId
+    );
+
+    // Process video
+    const result = await videoProcessor.processVideo(originalPath, {
+      generateThumbnails: true,
+      qualities: ['720p', '480p'],
+      uploadToStorage: false
+    });
+
+    // Update database with results
+    const processedPaths = JSON.stringify(result.processed);
+    const thumbnailPaths = JSON.stringify(result.thumbnails.map(t => t.path));
+    const metadata = JSON.stringify(result.metadata);
+
+    updateVideo.run(
+      'Untitled Video', '', processedPaths, thumbnailPaths, metadata,
+      result.metadata.duration, result.metadata.size, 'completed', 100,
+      new Date().toISOString(), videoId
+    );
+
+    console.log(`Video processing completed for ${videoId}`);
+  } catch (error) {
+    console.error(`Video processing failed for ${videoId}:`, error);
+    
+    // Update status to failed
+    updateVideo.run(
+      'Untitled Video', '', '', '', '', 0, 0, 'failed', 0,
+      new Date().toISOString(), videoId
+    );
+  }
+}
+
+// Get video processing status
+app.get('/api/videos/:id/status', authenticateToken, (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Check if user can access this video
+  if (req.user.role !== 'admin' && video.createdBy !== req.user.id && !video.isPublic) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  res.json({
+    id: video.id,
+    status: video.status,
+    progress: video.processingProgress,
+    metadata: video.metadata ? JSON.parse(video.metadata) : null
+  });
+});
+
+// Enhanced video listing
+app.get('/api/videos', authenticateToken, (req, res) => {
+  const videos = req.user.role === 'admin' ? listVideos.all() : listVideosByUser.all(req.user.id);
+  
+  const processedVideos = videos.map(video => ({
+    ...video,
+    processedPaths: video.processedPaths ? JSON.parse(video.processedPaths) : {},
+    thumbnailPaths: video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : [],
+    metadata: video.metadata ? JSON.parse(video.metadata) : null
+  }));
+
+  res.json(processedVideos);
+});
+
+// Get video details
+app.get('/api/videos/:id', authenticateToken, (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Check if user can access this video
+  if (req.user.role !== 'admin' && video.createdBy !== req.user.id && !video.isPublic) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Increment view count
+  updateVideoViews.run(req.params.id);
+
+  const processedVideo = {
+    ...video,
+    processedPaths: video.processedPaths ? JSON.parse(video.processedPaths) : {},
+    thumbnailPaths: video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : [],
+    metadata: video.metadata ? JSON.parse(video.metadata) : null
+  };
+
+  res.json(processedVideo);
+});
+
+// Stream video (with quality selection)
+app.get('/api/videos/:id/stream', (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const quality = req.query.quality || '720p';
+  const processedPaths = video.processedPaths ? JSON.parse(video.processedPaths) : {};
+  
+  let videoPath = video.originalPath;
+  if (processedPaths[quality]) {
+    videoPath = processedPaths[quality].path || processedPaths[quality];
+  }
+
+  if (!fs.existsSync(videoPath)) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video file not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const stat = fs.statSync(videoPath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunksize = (end - start) + 1;
+    const file = fs.createReadStream(videoPath, { start, end });
+    
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': 'video/mp4',
+    });
+    
+    file.pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': 'video/mp4',
+    });
+    fs.createReadStream(videoPath).pipe(res);
+  }
+});
+
+// Get video thumbnail
+app.get('/api/videos/:id/thumbnail', (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const thumbnailPaths = video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : [];
+  const thumbnailIndex = parseInt(req.query.index) || 0;
+  
+  if (thumbnailPaths.length === 0 || !thumbnailPaths[thumbnailIndex]) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Thumbnail not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const thumbnailPath = thumbnailPaths[thumbnailIndex];
+  if (!fs.existsSync(thumbnailPath)) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Thumbnail file not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  res.setHeader('Content-Type', 'image/jpeg');
+  fs.createReadStream(thumbnailPath).pipe(res);
+});
+
+// API Gateway routes
+app.use('/api/gateway', apiGateway.getRouter());
+
+// CRM routes
+app.use('/api/crm', crmSystem.getRouter());
+
+// App Builder routes
+app.use('/api/app-builder', appBuilder.getRouter());
+
+// Serve static files
+app.use('/uploads', express.static(storageDir));
+app.use('/thumbnails', express.static(path.join(dataDir, 'thumbnails')));
+app.use('/processed-videos', express.static(path.join(dataDir, 'processed-videos')));
+app.use('/apps', express.static(path.join(dataDir, 'generated-apps')));
 
 // Admin routes
 app.get('/api/admin/users', authenticateToken, requireRole(['admin']), (req, res) => {
