@@ -23,6 +23,12 @@ import TutorialAuto from './pages/TutorialAuto';
 import TutorialView from './pages/TutorialView';
 import VerifyEmail from './pages/VerifyEmail';
 import Reports from './pages/Reports';
+import VideoPlatform from './components/VideoPlatform';
+import ApiGateway from './components/ApiGateway';
+import CRMDashboard from './pages/CRMDashboard';
+import AppBuilder from './pages/AppBuilder';
+import VideoDetail from './pages/VideoDetail';
+import WorkflowExecution from './pages/WorkflowExecution';
 import './styles/animations.css';
 
 // Create a client
@@ -258,6 +264,58 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Reports />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Video Platform Routes */}
+            <Route path="/videos" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VideoPlatform />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/videos/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VideoDetail />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* CRM Routes */}
+            <Route path="/crm" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CRMDashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* App Builder Routes */}
+            <Route path="/app-builder" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AppBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* API Gateway Routes */}
+            <Route path="/api-gateway" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ApiGateway />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Workflow Execution Routes */}
+            <Route path="/workflows/:id/execute" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <WorkflowExecution />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
