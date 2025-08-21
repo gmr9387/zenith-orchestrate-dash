@@ -1,13 +1,9 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { TutorialSearch } from '../components/TutorialSearch';
 import { StepManagement } from '../components/StepManagement';
-import { StorageConfig } from '../components/StorageConfig';
-import WorkflowEngine from '../components/WorkflowEngine';
-import VideoPlatform from '../components/VideoPlatform';
-import ApiGateway from '../components/ApiGateway';
 import { 
   BookOpen, 
   Users, 
@@ -22,6 +18,17 @@ import {
   Star,
   Award
 } from 'lucide-react';
+
+const WorkflowEngine = lazy(() => import('../components/WorkflowEngine'));
+const VideoPlatform = lazy(() => import('../components/VideoPlatform'));
+const ApiGateway = lazy(() => import('../components/ApiGateway'));
+const StorageConfig = lazy(() => import('../components/StorageConfig'));
+
+const Loader = () => (
+  <div className="p-8">
+    <div className="animate-pulse text-sm text-muted-foreground">Loading…</div>
+  </div>
+);
 
 const TutorialBuilder: React.FC = () => {
   return (
@@ -210,7 +217,9 @@ const TutorialBuilder: React.FC = () => {
                   Build powerful automation workflows that rival Zapier and Integromat
                 </p>
               </div>
-              <WorkflowEngine />
+              <Suspense fallback={<Loader />}>
+                <WorkflowEngine />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="videos" className="mt-6">
@@ -220,7 +229,9 @@ const TutorialBuilder: React.FC = () => {
                   Professional video hosting and streaming platform with enterprise features
                 </p>
               </div>
-              <VideoPlatform />
+              <Suspense fallback={<Loader />}>
+                <VideoPlatform />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="api" className="mt-6">
@@ -230,7 +241,9 @@ const TutorialBuilder: React.FC = () => {
                   Advanced API testing and management platform for developers
                 </p>
               </div>
-              <ApiGateway />
+              <Suspense fallback={<Loader />}>
+                <ApiGateway />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="storage" className="mt-6">
@@ -240,7 +253,9 @@ const TutorialBuilder: React.FC = () => {
                   Configure S3-compatible storage for your media assets
                 </p>
               </div>
-              <StorageConfig />
+              <Suspense fallback={<Loader />}>
+                <StorageConfig />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </CardContent>
