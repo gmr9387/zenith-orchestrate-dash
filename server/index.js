@@ -196,6 +196,30 @@ app.delete('/api/workflows/:id', (req, res) => {
   res.json({ success: true, message: 'deleted' });
 });
 
+// App Builder: simple schema storage in memory
+let appSchemas = [];
+app.get('/api/app-schemas', (_req, res) => {
+  res.json({ success: true, message: 'ok', data: appSchemas });
+});
+app.post('/api/app-schemas', (req, res) => {
+  const { name, schema } = req.body || {};
+  const item = { id: nanoid(), name: String(name||'Untitled App'), schema: schema ?? {}, createdAt: Date.now(), updatedAt: Date.now() };
+  appSchemas.unshift(item);
+  res.json({ success: true, message: 'created', data: item });
+});
+app.put('/api/app-schemas/:id', (req, res) => {
+  const idx = appSchemas.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'not_found' });
+  appSchemas[idx] = { ...appSchemas[idx], ...req.body, updatedAt: Date.now() };
+  res.json({ success: true, message: 'updated', data: appSchemas[idx] });
+});
+app.delete('/api/app-schemas/:id', (req, res) => {
+  const before = appSchemas.length;
+  appSchemas = appSchemas.filter(a => a.id !== req.params.id);
+  if (appSchemas.length === before) return res.status(404).json({ success: false, message: 'not_found' });
+  res.json({ success: true, message: 'deleted' });
+});
+
 // Serve frontend build with strong caching for assets
 const distDir = path.join(__dirnameLocal, 'dist');
 if (fs.existsSync(distDir)) {
