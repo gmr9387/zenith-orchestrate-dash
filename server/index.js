@@ -10,6 +10,8 @@ import sqlite3 from 'better-sqlite3';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+// pino will be loaded dynamically to avoid test runner resolution issues
+
 
 // Import video processor, API gateway, CRM system, and App Builder
 import VideoProcessor from './video-processor.js';
@@ -22,6 +24,37 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const app = express();
+
+// Logger (dynamic to play nice with test runners)
+(async () => {
+	try {
+		const { default: pino } = await import('pino');
+		const { default: pinoHttp } = await import('pino-http');
+		const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+		app.use(pinoHttp({
+			logger,
+			customLogLevel: function (req, res, err) {
+				if (res.statusCode >= 500 || err) return 'error';
+				if (res.statusCode >= 400) return 'warn';
+				return 'info';
+			},
+			genReqId: function (req) {
+				return req.headers['x-request-id'] || nanoid(8);
+			},
+			serializers: {
+				req(req) { return { id: req.id, method: req.method, url: req.url }; },
+				res(res) { return { statusCode: res.statusCode }; }
+			}
+		}));
+	} catch (e) {
+		// Fallback: basic request id header without pino
+		app.use((req, res, next) => {
+			res.setHeader('X-Request-ID', req.headers['x-request-id'] || nanoid(8));
+			next();
+		});
+	}
+})();
+
 
 // Security headers
 app.use(helmet({
