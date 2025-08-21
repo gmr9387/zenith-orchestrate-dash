@@ -20,6 +20,9 @@ import ApiGateway from './api-gateway.js';
 import CRMSystem from './crm.js';
 import AppBuilder from './app-builder.js';
 import { createRateLimiter } from './rate-limit.js';
+import WorkflowEngine from './workflow-engine.js';
+import VideoQueue from './video-queue.js';
+import StorageManager from './storage-manager.js';
 
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
@@ -229,6 +232,19 @@ const crmSystem = new CRMSystem(db, {});
 
 const appBuilder = new AppBuilder(db, {});
 
+const workflowEngine = new WorkflowEngine(db);
+
+const videoQueue = new VideoQueue(db, { concurrency: 2 });
+
+const storageManager = new StorageManager({
+  provider: process.env.STORAGE_PROVIDER || 'local',
+  endpoint: process.env.STORAGE_ENDPOINT,
+  region: process.env.STORAGE_REGION,
+  bucket: process.env.STORAGE_BUCKET,
+  accessKeyId: process.env.STORAGE_ACCESS_KEY_ID,
+  secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY
+});
+
 // Enhanced video database schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS videos (
@@ -295,6 +311,7 @@ const listVideosByUser = db.prepare('SELECT * FROM videos WHERE createdBy = ? AN
 const updateVideo = db.prepare('UPDATE videos SET title = ?, description = ?, processedPaths = ?, thumbnailPaths = ?, metadata = ?, duration = ?, size = ?, status = ?, processingProgress = ?, updatedAt = ? WHERE id = ?');
 const updateVideoViews = db.prepare('UPDATE videos SET views = views + 1 WHERE id = ?');
 const softDeleteVideo = db.prepare('UPDATE videos SET deletedAt = ?, updatedAt = ? WHERE id = ?');
+const incrementVideoViews = db.prepare('UPDATE videos SET views = views + 1 WHERE id = ?');
 
 // Schemas
 const UserCreateSchema = z.object({
@@ -895,6 +912,113 @@ app.delete('/api/workflows/:id', authenticateToken, (req, res) => {
 	res.json({ ok: true });
 });
 
+// Execute workflow
+app.post('/api/workflows/:id/execute', authenticateToken, async (req, res) => {
+  const workflow = getWorkflow.get(req.params.id);
+  if (!workflow) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Workflow not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Check if user can access this workflow
+  if (req.user.role !== 'admin' && workflow.createdBy !== req.user.id) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  try {
+    const { input = {} } = req.body;
+    const result = await workflowEngine.executeWorkflow(req.params.id, input, req.user.id);
+    
+    logAudit(req.user.id, 'workflow_executed', 'workflows', req.params.id, { input }, req);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Workflow execution error:', error);
+    res.status(500).json({ 
+      error: { 
+        code: 'execution_failed', 
+        message: error.message,
+        requestId: req.id
+      } 
+    });
+  }
+});
+
+// Get workflow execution history
+app.get('/api/workflows/:id/executions', authenticateToken, (req, res) => {
+  const workflow = getWorkflow.get(req.params.id);
+  if (!workflow) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Workflow not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Check if user can access this workflow
+  if (req.user.role !== 'admin' && workflow.createdBy !== req.user.id) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const limit = parseInt(req.query.limit) || 10;
+  const executions = workflowEngine.getExecutionHistory(req.params.id, limit);
+  
+  const processed = executions.map(execution => ({
+    ...execution,
+    result: execution.result ? JSON.parse(execution.result) : null,
+    logs: execution.logs ? JSON.parse(execution.logs) : []
+  }));
+
+  res.json(processed);
+});
+
+// Get execution details
+app.get('/api/executions/:id', authenticateToken, (req, res) => {
+  const execution = workflowEngine.getExecutionDetails(req.params.id);
+  if (!execution) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Execution not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  // Check if user can access this execution
+  const workflow = getWorkflow.get(execution.workflowId);
+  if (!workflow || (req.user.role !== 'admin' && workflow.createdBy !== req.user.id)) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  res.json(execution);
+});
+
 // Enhanced video upload with processing
 app.post('/api/videos/upload', authenticateToken, upload.single('video'), async (req, res) => {
   try {
@@ -920,85 +1044,35 @@ app.post('/api/videos/upload', authenticateToken, upload.single('video'), async 
     insertVideo.run(videoId, title || 'Untitled Video', description || '', originalPath, req.user.id, now, now);
 
     // Start processing in background
-    processVideoAsync(videoId, originalPath, req.user.id);
+    videoQueue.addVideoJob(videoId, originalPath, {
+      generateThumbnails: true,
+      qualities: ['720p', '480p'],
+      hls: true
+    });
 
     logAudit(req.user.id, 'video_uploaded', 'videos', videoId, { title, originalName: req.file.originalname }, req);
 
-    res.json({ 
-      id: videoId,
-      title: title || 'Untitled Video',
-      status: 'processing',
-      message: 'Video uploaded and processing started'
+    res.status(201).json({ 
+      id: videoId, 
+      message: 'Video uploaded and processing started',
+      requestId: req.id
     });
   } catch (error) {
     console.error('Video upload error:', error);
     res.status(500).json({ 
       error: { 
         code: 'upload_failed', 
-        message: 'Failed to upload video',
+        message: error.message,
         requestId: req.id
       } 
     });
   }
 });
 
-// Process video asynchronously
-async function processVideoAsync(videoId, originalPath, userId) {
-  try {
-    console.log(`Starting video processing for ${videoId}`);
-    
-    // Update status to processing
-    updateVideo.run(
-      'Untitled Video', '', '', '', '', 0, 0, 'processing', 0, new Date().toISOString(), videoId
-    );
 
-    // Lazy-load and instantiate processor
-    if (VideoProcessor === null) {
-      const mod = await import('./video-processor.js');
-      VideoProcessor = mod.default;
-    }
-    const videoProcessor = new VideoProcessor({
-      outputDir: path.join(dataDir, 'processed-videos'),
-      thumbnailDir: path.join(dataDir, 'thumbnails'),
-      hlsDir: path.join(dataDir, 'hls')
-    });
-
-    // Process video
-    const result = await videoProcessor.processVideo(originalPath, {
-      generateThumbnails: true,
-      qualities: ['720p', '480p'],
-      uploadToStorage: false
-    });
-
-    // Update database with results
-    const processed = { ...result.processed };
-    if (result.hls) {
-      processed['hls'] = { manifestPath: result.hls.manifestPath, baseDir: result.hls.baseDir };
-    }
-    const processedPaths = JSON.stringify(processed);
-    const thumbnailPaths = JSON.stringify(result.thumbnails.map(t => t.path));
-    const metadata = JSON.stringify(result.metadata);
-
-    updateVideo.run(
-      'Untitled Video', '', processedPaths, thumbnailPaths, metadata,
-      result.metadata.duration, result.metadata.size, 'completed', 100,
-      new Date().toISOString(), videoId
-    );
-
-    console.log(`Video processing completed for ${videoId}`);
-  } catch (error) {
-    console.error(`Video processing failed for ${videoId}:`, error);
-    
-    // Update status to failed
-    updateVideo.run(
-      'Untitled Video', '', '', '', '', 0, 0, 'failed', 0,
-      new Date().toISOString(), videoId
-    );
-  }
-}
 
 // Get video processing status
-app.get('/api/videos/:id/status', authenticateToken, (req, res) => {
+app.get('/api/videos/:id/status', authenticateToken, async (req, res) => {
   const video = getVideo.get(req.params.id);
   if (!video) {
     return res.status(404).json({ 
@@ -1010,8 +1084,7 @@ app.get('/api/videos/:id/status', authenticateToken, (req, res) => {
     });
   }
 
-  // Check if user can access this video
-  if (req.user.role !== 'admin' && video.createdBy !== req.user.id && !video.isPublic) {
+  if (req.user.role !== 'admin' && video.createdBy !== req.user.id) {
     return res.status(403).json({ 
       error: { 
         code: 'forbidden', 
@@ -1021,12 +1094,57 @@ app.get('/api/videos/:id/status', authenticateToken, (req, res) => {
     });
   }
 
-  res.json({
-    id: video.id,
-    status: video.status,
-    progress: video.processingProgress,
-    metadata: video.metadata ? JSON.parse(video.metadata) : null
-  });
+  try {
+    const queueStatus = await videoQueue.getJobStatus(req.params.id);
+    const dbStatus = {
+      status: video.status,
+      processingProgress: video.processingProgress,
+      processedPaths: video.processedPaths ? JSON.parse(video.processedPaths) : null,
+      thumbnailPaths: video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : null,
+      metadata: video.metadata ? JSON.parse(video.metadata) : null
+    };
+
+    res.json({
+      ...dbStatus,
+      queue: queueStatus
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    res.status(500).json({ 
+      error: { 
+        code: 'status_check_failed', 
+        message: error.message,
+        requestId: req.id
+      } 
+    });
+  }
+});
+
+// Get queue statistics
+app.get('/api/videos/queue/stats', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Admin access required',
+        requestId: req.id
+      } 
+    });
+  }
+
+  try {
+    const stats = await videoQueue.getQueueStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Queue stats error:', error);
+    res.status(500).json({ 
+      error: { 
+        code: 'stats_failed', 
+        message: error.message,
+        requestId: req.id
+      } 
+    });
+  }
 });
 
 // Enhanced video listing
@@ -1043,8 +1161,8 @@ app.get('/api/videos', authenticateToken, (req, res) => {
   res.json(processedVideos);
 });
 
-// Get video details
-app.get('/api/videos/:id', authenticateToken, (req, res) => {
+// Get video with signed URLs
+app.get('/api/videos/:id', authenticateToken, async (req, res) => {
   const video = getVideo.get(req.params.id);
   if (!video) {
     return res.status(404).json({ 
@@ -1056,7 +1174,6 @@ app.get('/api/videos/:id', authenticateToken, (req, res) => {
     });
   }
 
-  // Check if user can access this video
   if (req.user.role !== 'admin' && video.createdBy !== req.user.id && !video.isPublic) {
     return res.status(403).json({ 
       error: { 
@@ -1068,16 +1185,34 @@ app.get('/api/videos/:id', authenticateToken, (req, res) => {
   }
 
   // Increment view count
-  updateVideoViews.run(req.params.id);
+  incrementVideoViews.run(video.id);
 
-  const processedVideo = {
+  // Generate signed URLs if using S3 storage
+  let signedUrls = null;
+  if (storageManager.config.provider !== 'local' && video.processedPaths) {
+    try {
+      const processedPaths = JSON.parse(video.processedPaths);
+      signedUrls = {};
+      
+      for (const [quality, path] of Object.entries(processedPaths)) {
+        if (quality !== 'hls' && path) {
+          signedUrls[quality] = await storageManager.getSignedUrl(path, 'getObject', 3600);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate signed URLs:', error);
+    }
+  }
+
+  const result = {
     ...video,
-    processedPaths: video.processedPaths ? JSON.parse(video.processedPaths) : {},
-    thumbnailPaths: video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : [],
-    metadata: video.metadata ? JSON.parse(video.metadata) : null
+    processedPaths: video.processedPaths ? JSON.parse(video.processedPaths) : null,
+    thumbnailPaths: video.thumbnailPaths ? JSON.parse(video.thumbnailPaths) : null,
+    metadata: video.metadata ? JSON.parse(video.metadata) : null,
+    signedUrls
   };
 
-  res.json(processedVideo);
+  res.json(result);
 });
 
 // Stream video (with quality selection)
@@ -1200,6 +1335,95 @@ app.get('/api/videos/:id/hls', authenticateToken, (req, res) => {
   res.json({ manifestUrl: url });
 });
 
+// Storage management endpoints
+app.get('/api/storage/health', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const health = {
+      provider: storageManager.config.provider,
+      available: storageManager.client !== null,
+      bucket: storageManager.config.bucket
+    };
+    
+    if (storageManager.config.provider !== 'local') {
+      // Test connection
+      const testKey = `health-check-${Date.now()}`;
+      const testData = 'health-check';
+      const fs = await import('fs');
+      const tempPath = `/tmp/${testKey}`;
+      fs.writeFileSync(tempPath, testData);
+      
+      try {
+        await storageManager.uploadFile(tempPath, testKey);
+        await storageManager.deleteFile(testKey);
+        fs.unlinkSync(tempPath);
+        health.connection = 'ok';
+      } catch (error) {
+        health.connection = 'failed';
+        health.error = error.message;
+      }
+    }
+    
+    res.json(health);
+  } catch (error) {
+    res.status(500).json({ 
+      error: { 
+        code: 'health_check_failed', 
+        message: error.message,
+        requestId: req.id
+      } 
+    });
+  }
+});
+
+// Get signed URL for video asset
+app.post('/api/videos/:id/signed-url', authenticateToken, async (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ 
+      error: { 
+        code: 'not_found', 
+        message: 'Video not found',
+        requestId: req.id
+      } 
+    });
+  }
+
+  if (req.user.role !== 'admin' && video.createdBy !== req.user.id) {
+    return res.status(403).json({ 
+      error: { 
+        code: 'forbidden', 
+        message: 'Access denied',
+        requestId: req.id
+      } 
+    });
+  }
+
+  const { key, operation = 'getObject', expiresIn = 3600 } = req.body;
+  
+  if (!key) {
+    return res.status(400).json({ 
+      error: { 
+        code: 'invalid_request', 
+        message: 'Key is required',
+        requestId: req.id
+      } 
+    });
+  }
+
+  try {
+    const signedUrl = await storageManager.getSignedUrl(key, operation, expiresIn);
+    res.json({ signedUrl, expiresIn });
+  } catch (error) {
+    res.status(500).json({ 
+      error: { 
+        code: 'signed_url_failed', 
+        message: error.message,
+        requestId: req.id
+      } 
+    });
+  }
+});
+
 // API Gateway routes
 app.use('/api/gateway', apiGateway.getRouter());
 
@@ -1215,6 +1439,7 @@ app.use('/thumbnails', express.static(path.join(dataDir, 'thumbnails')));
 app.use('/processed-videos', express.static(path.join(dataDir, 'processed-videos')));
 app.use('/hls', express.static(path.join(dataDir, 'hls')));
 app.use('/apps', express.static(path.join(dataDir, 'generated-apps')));
+app.use('/storage', express.static(path.join(dataDir, 'storage')));
 
 // Admin routes
 app.get('/api/admin/users', authenticateToken, requireRole(['admin']), (req, res) => {
