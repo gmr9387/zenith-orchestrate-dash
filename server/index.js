@@ -19,6 +19,7 @@ let VideoProcessor = null;
 import ApiGateway from './api-gateway.js';
 import CRMSystem from './crm.js';
 import AppBuilder from './app-builder.js';
+import { createRateLimiter } from './rate-limit.js';
 
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
@@ -110,35 +111,8 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Very basic in-memory rate limiting per-IP per minute
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 120;
-const ipCounters = new Map();
-app.use((req, res, next) => {
-	try {
-		const ip = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
-		const now = Date.now();
-		const entry = ipCounters.get(ip) || { count: 0, windowStart: now };
-		if (now - entry.windowStart > WINDOW_MS) {
-			entry.count = 0;
-			entry.windowStart = now;
-		}
-		entry.count++;
-		ipCounters.set(ip, entry);
-		if (entry.count > MAX_REQUESTS) {
-			return res.status(429).json({ 
-				error: { 
-					code: 'rate_limited', 
-					message: 'Too many requests. Please try again later.',
-					requestId: req.id
-				} 
-			});
-		}
-		next();
-	} catch (e) {
-		next(e);
-	}
-});
+// Global rate limit (fallbacks to memory if no Redis)
+app.use(createRateLimiter({ limitPerMinute: parseInt(process.env.RATE_LIMIT_PER_MIN || '600') }));
 
 const __dirnameLocal = path.resolve();
 const dataDir = path.join(__dirnameLocal, 'server');
