@@ -1,50 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { authManager } from '../lib/auth';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Label } from '../components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react';
+import { useAuthStore } from '../lib/auth';
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     email: '',
     password: '',
-    confirmPassword: '',
+    confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [passwordStrength, setPasswordStrength] = useState({
     score: 0,
-    feedback: '',
+    feedback: ''
   });
+  
   const navigate = useNavigate();
+  const { register, isAuthenticated, error: authError, clearError } = useAuthStore();
 
-  const validatePassword = (password: string) => {
-    const checks = {
-      length: password.length >= 8,
-      uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
-      number: /\d/.test(password),
-      special: /[@$!%*?&]/.test(password),
-    };
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
 
-    const score = Object.values(checks).filter(Boolean).length;
-    let feedback = '';
+  // Clear error when component mounts
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
-    if (score === 5) feedback = 'Strong password';
-    else if (score >= 4) feedback = 'Good password';
-    else if (score >= 3) feedback = 'Fair password';
-    else feedback = 'Weak password';
+  // Check password strength
+  const checkPasswordStrength = (password: string) => {
+    let score = 0;
+    const feedback = [];
 
-    return { score, feedback };
+    if (password.length >= 8) score++;
+    else feedback.push('At least 8 characters');
+
+    if (/[a-z]/.test(password)) score++;
+    else feedback.push('Include lowercase letter');
+
+    if (/[A-Z]/.test(password)) score++;
+    else feedback.push('Include uppercase letter');
+
+    if (/[0-9]/.test(password)) score++;
+    else feedback.push('Include number');
+
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    else feedback.push('Include special character');
+
+    setPasswordStrength({
+      score,
+      feedback: feedback.join(', ')
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,141 +70,93 @@ const Register: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
 
     if (name === 'password') {
-      setPasswordStrength(validatePassword(value));
+      checkPasswordStrength(value);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     setError('');
-    setSuccess('');
 
-    // Validate passwords match
+    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      setIsLoading(false);
       return;
     }
 
-    // Validate password strength
-    if (passwordStrength.score < 4) {
+    if (passwordStrength.score < 3) {
       setError('Password is too weak. Please choose a stronger password.');
+      setIsLoading(false);
       return;
     }
-
-    setIsLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-      const response = await fetch(`${apiBase}/api/v1/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          password: formData.password,
-          role: 'user',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || data.message || 'Registration failed');
-      }
-
-      if (data.success) {
-        // Store tokens if auto-login is enabled
-        if (data.data.tokens) {
-          authManager.setToken({
-            access_token: data.data.tokens.accessToken,
-            refresh_token: data.data.tokens.refreshToken,
-            expires_at: Date.now() + 3600000, // 1 hour from now
-            user_id: data.data.user.id
-          });
-          localStorage.setItem('user', JSON.stringify(data.data.user));
-        }
-
-        setSuccess('Registration successful! Please check your email to verify your account.');
-        
-        // Redirect to login after a delay
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
-      } else {
-        throw new Error(data.message || 'Registration failed');
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setError(error instanceof Error ? error.message : 'Registration failed');
+      await register(formData.email, formData.password, formData.name);
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   const getPasswordStrengthColor = () => {
-    if (passwordStrength.score >= 4) return 'text-green-600';
-    if (passwordStrength.score >= 3) return 'text-yellow-600';
-    return 'text-red-600';
+    if (passwordStrength.score <= 2) return 'text-red-500';
+    if (passwordStrength.score <= 3) return 'text-yellow-500';
+    if (passwordStrength.score <= 4) return 'text-blue-500';
+    return 'text-green-500';
+  };
+
+  const getPasswordStrengthText = () => {
+    if (passwordStrength.score <= 2) return 'Weak';
+    if (passwordStrength.score <= 3) return 'Fair';
+    if (passwordStrength.score <= 4) return 'Good';
+    return 'Strong';
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Join Zilliance and start building amazing tutorials
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="w-full max-w-md">
+        {/* Logo and Brand */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Zilliance</h1>
+          <p className="text-gray-600">Enterprise Tutorial & Workflow Platform</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign Up</CardTitle>
-            <CardDescription>
-              Fill in your details to create your account
+        <Card className="shadow-xl">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold text-center">Create account</CardTitle>
+            <CardDescription className="text-center">
+              Sign up to get started with Zilliance
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          
+          <CardContent className="space-y-4">
+            {/* Error Alert */}
+            {(error || authError) && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {error || authError}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Registration Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {success && (
-                <Alert>
-                  <AlertDescription>{success}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First name</Label>
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="firstName"
-                    name="firstName"
+                    id="name"
+                    name="name"
                     type="text"
-                    value={formData.firstName}
+                    placeholder="Enter your full name"
+                    value={formData.name}
                     onChange={handleInputChange}
-                    placeholder="First name"
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last name</Label>
-                  <Input
-                    id="lastName"
-                    name="lastName"
-                    type="text"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    placeholder="Last name"
+                    className="pl-10"
                     required
                     disabled={isLoading}
                   />
@@ -194,118 +164,124 @@ const Register: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="Enter your email"
-                  required
-                  disabled={isLoading}
-                />
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="pl-10"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="password"
                     name="password"
                     type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    placeholder="Create a strong password"
+                    className="pl-10 pr-10"
                     required
                     disabled={isLoading}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     disabled={isLoading}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-400" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-400" />
+                      <Eye className="h-4 w-4" />
                     )}
-                  </button>
+                  </Button>
                 </div>
                 
-                {/* Password strength indicator */}
+                {/* Password Strength Indicator */}
                 {formData.password && (
-                  <div className="flex items-center space-x-2 text-sm">
-                    <span className={getPasswordStrengthColor()}>
-                      {passwordStrength.feedback}
-                    </span>
-                    {passwordStrength.score >= 4 && (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Password strength:</span>
+                      <span className={`font-medium ${getPasswordStrengthColor()}`}>
+                        {getPasswordStrengthText()}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          passwordStrength.score <= 2 ? 'bg-red-500' :
+                          passwordStrength.score <= 3 ? 'bg-yellow-500' :
+                          passwordStrength.score <= 4 ? 'bg-blue-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                      />
+                    </div>
+                    {passwordStrength.feedback && (
+                      <p className="text-xs text-gray-500">
+                        {passwordStrength.feedback}
+                      </p>
                     )}
                   </div>
                 )}
-
-                {/* Password requirements */}
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>Password must contain:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li className={formData.password.length >= 8 ? 'text-green-600' : 'text-gray-400'}>
-                      At least 8 characters
-                    </li>
-                    <li className={/[A-Z]/.test(formData.password) ? 'text-green-600' : 'text-gray-400'}>
-                      One uppercase letter
-                    </li>
-                    <li className={/[a-z]/.test(formData.password) ? 'text-green-600' : 'text-gray-400'}>
-                      One lowercase letter
-                    </li>
-                    <li className={/\d/.test(formData.password) ? 'text-green-600' : 'text-gray-400'}>
-                      One number
-                    </li>
-                    <li className={/[@$!%*?&]/.test(formData.password) ? 'text-green-600' : 'text-gray-400'}>
-                      One special character (@$!%*?&)
-                    </li>
-                  </ul>
-                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm password</Label>
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="confirmPassword"
                     name="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
-                    placeholder="Confirm your password"
+                    className="pl-10 pr-10"
                     required
                     disabled={isLoading}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     disabled={isLoading}
                   >
                     {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-400" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-400" />
+                      <Eye className="h-4 w-4" />
                     )}
-                  </button>
+                  </Button>
                 </div>
                 
-                {/* Password match indicator */}
+                {/* Password Match Indicator */}
                 {formData.confirmPassword && (
                   <div className="flex items-center space-x-2 text-sm">
                     {formData.password === formData.confirmPassword ? (
                       <>
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-green-500" />
                         <span className="text-green-600">Passwords match</span>
                       </>
                     ) : (
                       <>
+                        <div className="h-4 w-4 rounded-full border-2 border-red-500" />
                         <span className="text-red-600">Passwords do not match</span>
                       </>
                     )}
@@ -316,7 +292,7 @@ const Register: React.FC = () => {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || passwordStrength.score < 4 || formData.password !== formData.confirmPassword}
+                disabled={isLoading || formData.password !== formData.confirmPassword || passwordStrength.score < 3}
               >
                 {isLoading ? (
                   <>
@@ -324,24 +300,46 @@ const Register: React.FC = () => {
                     Creating account...
                   </>
                 ) : (
-                  'Create account'
+                  <>
+                    Create account
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            {/* Links */}
+            <div className="text-center space-y-2">
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
                 <Link
                   to="/login"
-                  className="font-medium text-blue-600 hover:text-blue-500"
+                  className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
                   Sign in
                 </Link>
               </p>
+              
+              <p className="text-xs text-gray-500">
+                By creating an account, you agree to our{' '}
+                <a href="#" className="underline hover:text-gray-700">
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a href="#" className="underline hover:text-gray-700">
+                  Privacy Policy
+                </a>
+              </p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-sm text-gray-500">
+            © 2024 Zilliance. All rights reserved.
+          </p>
+        </div>
       </div>
     </div>
   );

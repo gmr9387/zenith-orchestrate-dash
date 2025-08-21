@@ -5,7 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { authManager } from './lib/auth';
+import { initializeAuth, useAuthStore } from './lib/auth';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -38,9 +38,10 @@ const queryClient = new QueryClient({
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
-  const isAuthenticated = demoModeEnabled || authManager.isAuthenticated();
+  const { isAuthenticated } = useAuthStore();
+  const authenticated = demoModeEnabled || isAuthenticated;
   
-  if (!isAuthenticated) {
+  if (!authenticated) {
     return <Navigate to="/login" replace />;
   }
   
@@ -49,7 +50,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirects authenticated users)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isAuthenticated = authManager.isAuthenticated();
+  const { isAuthenticated } = useAuthStore();
   
   if (isAuthenticated) {
     return <Navigate to="/" replace />;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { authManager } from '../lib/auth';
+import { useAuthStore } from '../lib/auth';
 import EnhancedNavigation from './EnhancedNavigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -49,30 +49,23 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, isAuthenticated, logout } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    const loadUser = () => {
-      try {
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          setUser(JSON.parse(userData));
-        }
-      } catch (error) {
-        console.error('Failed to load user data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Check authentication status
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
 
-    loadUser();
-  }, []);
+    setIsLoading(false);
+  }, [isAuthenticated, navigate]);
 
   const handleLogout = () => {
-    authManager.logout();
+    logout();
     navigate('/login');
   };
 
@@ -119,7 +112,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     );
   }
 
-  if (!user) {
+  if (!user || !isAuthenticated) {
     navigate('/login');
     return null;
   }

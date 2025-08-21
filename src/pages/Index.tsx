@@ -14,7 +14,7 @@ import { ActivityFeed } from '@/components/ActivityFeed';
 import { ToolCard } from '@/components/ToolCard';
 import { toast } from '@/components/ui/sonner';
 import { NetworkVisualization } from '@/components/NetworkVisualization';
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/lib/auth';
 
 // Import hero images
 import apiHubHero from '@/assets/api-hub-hero.jpg';

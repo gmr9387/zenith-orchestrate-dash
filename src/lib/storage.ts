@@ -1,5 +1,4 @@
-import { apiClient, ApiResponse } from './api';
-import { authManager } from './auth';
+import { apiClient } from './auth';
 
 export interface StorageConfig {
   provider: 's3' | 'minio' | 'digitalocean' | 'cloudflare';

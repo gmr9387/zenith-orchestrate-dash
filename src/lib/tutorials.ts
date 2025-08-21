@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse } from './api';
+import { apiClient } from './auth';
 import { storageManager } from './storage';
 
 export interface TutorialStep {

@@ -9,7 +9,7 @@ import {
   BarChart3, TrendingUp, Users, BookOpen, Eye, Clock,
   Download, Filter, Calendar, Target, Activity, Award
 } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/lib/auth';
 import { toast } from '@/components/ui/sonner';
 
 interface ReportMetrics {
