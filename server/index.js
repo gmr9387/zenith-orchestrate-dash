@@ -115,6 +115,23 @@ app.get('/api/tutorials/:id/media', (req, res) => {
   fs.createReadStream(m.path).pipe(res);
 });
 
+// Serve frontend build with strong caching for assets
+const distDir = path.join(__dirnameLocal, 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir, {
+    setHeaders: (res, filePath) => {
+      if (/\.(js|css|png|jpe?g|webp|avif|svg)$/.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+  // SPA fallback
+  app.get('*', (_req, res, next) => {
+    if (_req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${PORT}`);
