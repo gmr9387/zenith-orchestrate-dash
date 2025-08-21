@@ -1,6 +1,7 @@
 // Simple backend API for tutorials: Express + SQLite + file storage
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import compression from 'compression';
 import { nanoid } from 'nanoid';
@@ -11,7 +12,13 @@ import sqlite3 from 'better-sqlite3';
 const PORT = process.env.PORT || 4000;
 const app = express();
 app.use(compression());
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(',') || '*',
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  credentials: true,
+}));
+app.set('trust proxy', 1);
+app.use(rateLimit({ windowMs: 60 * 1000, max: 300 }));
 app.use(express.json({ limit: '5mb' }));
 
 const __dirnameLocal = path.resolve();
@@ -60,6 +67,56 @@ const upsertMedia = db.prepare('INSERT INTO media (tutorialId, mimeType, path, s
 const getMedia = db.prepare('SELECT * FROM media WHERE tutorialId = ?');
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// Simple Reports Endpoints for frontend features
+app.get('/api/reports/metrics', (req, res) => {
+  const range = (req.query.range || '30d').toString();
+  res.json({
+    success: true,
+    message: 'ok',
+    data: {
+      totalUsers: 1234,
+      activeUsers: 892,
+      totalTutorials: 156,
+      completionRate: 78.5,
+      averageTime: 847,
+      revenue: 45670,
+      growth: { users: 12, tutorials: 8, revenue: 23 },
+      range,
+    }
+  });
+});
+
+app.get('/api/reports/tutorials', (req, res) => {
+  const data = [
+    { id: '1', title: 'Getting Started Guide', views: 2456, completions: 1987, averageTime: 12.5, rating: 4.8, dropoffRate: 8.2 },
+    { id: '2', title: 'Advanced Features', views: 1876, completions: 1234, averageTime: 18.7, rating: 4.6, dropoffRate: 15.3 },
+    { id: '3', title: 'Integration Setup', views: 1543, completions: 987, averageTime: 25.4, rating: 4.4, dropoffRate: 22.1 }
+  ];
+  res.json({ success: true, message: 'ok', data });
+});
+
+app.get('/api/reports/users', (req, res) => {
+  const data = {
+    totalUsers: 1234,
+    activeUsers: 892,
+    newUsers: 156,
+    retentionRate: 84.2,
+    topRegions: [
+      { region: 'North America', count: 567 },
+      { region: 'Europe', count: 345 },
+      { region: 'Asia Pacific', count: 234 }
+    ]
+  };
+  res.json({ success: true, message: 'ok', data });
+});
+
+app.get('/api/reports/export', (req, res) => {
+  const type = (req.query.type || 'overview').toString();
+  const range = (req.query.range || '30d').toString();
+  const payload = { type, range, generatedAt: new Date().toISOString() };
+  res.json({ success: true, message: 'ok', data: payload });
+});
 
 app.post('/api/tutorials', (req, res) => {
   const title = (req.body?.title || '').toString().trim() || 'Untitled Tutorial';
