@@ -1,4 +1,5 @@
-import Redis from 'ioredis';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 let redisClient = null;
 
@@ -6,13 +7,18 @@ export function getRedisClient() {
 	if (redisClient) return redisClient;
 	const url = process.env.REDIS_URL || '';
 	if (!url) return null;
-	redisClient = new Redis(url, {
-		lazyConnect: true,
-		retryStrategy(times) {
-			return Math.min(times * 200, 2000);
-		}
-	});
-	return redisClient;
+	try {
+		const Redis = require('ioredis');
+		redisClient = new Redis(url, {
+			lazyConnect: true,
+			retryStrategy(times) {
+				return Math.min(times * 200, 2000);
+			}
+		});
+		return redisClient;
+	} catch (_e) {
+		return null;
+	}
 }
 
 export async function ensureRedisConnected() {

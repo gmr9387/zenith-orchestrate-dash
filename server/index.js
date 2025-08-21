@@ -1180,6 +1180,26 @@ app.get('/api/videos/:id/thumbnail', (req, res) => {
   fs.createReadStream(thumbnailPath).pipe(res);
 });
 
+// Get HLS manifest URL
+app.get('/api/videos/:id/hls', authenticateToken, (req, res) => {
+  const video = getVideo.get(req.params.id);
+  if (!video) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Video not found', requestId: req.id } });
+  }
+  if (req.user.role !== 'admin' && video.createdBy !== req.user.id && !video.isPublic) {
+    return res.status(403).json({ error: { code: 'forbidden', message: 'Access denied', requestId: req.id } });
+  }
+  const processed = video.processedPaths ? JSON.parse(video.processedPaths) : {};
+  const hlsInfo = processed.hls;
+  if (!hlsInfo || !hlsInfo.manifestPath) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'HLS manifest not available', requestId: req.id } });
+  }
+  const hlsDir = path.join(dataDir, 'hls');
+  const rel = hlsInfo.manifestPath.startsWith(hlsDir) ? hlsInfo.manifestPath.substring(hlsDir.length) : path.basename(hlsInfo.manifestPath);
+  const url = `/hls${rel.startsWith('/') ? rel : '/' + rel}`;
+  res.json({ manifestUrl: url });
+});
+
 // API Gateway routes
 app.use('/api/gateway', apiGateway.getRouter());
 
