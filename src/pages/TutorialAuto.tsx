@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { autoGenerateTutorial, AutomationAction } from "@/lib/automation";
+import { hasBackend, apiPost } from "@/lib/api";
 
 export default function TutorialAuto() {
   const navigate = useNavigate();
@@ -17,7 +18,13 @@ export default function TutorialAuto() {
   async function submit() {
     try {
       setBusy(true);
-      const id = await autoGenerateTutorial(title, json);
+      let id: string;
+      if (hasBackend()) {
+        const resp = await apiPost(`/tutorials/generate`, { title, actions: json });
+        id = (resp as any).data?.id;
+      } else {
+        id = await autoGenerateTutorial(title, json);
+      }
       toast("Tutorial generated", { description: title });
       navigate(`/tutorial/${id}`);
     } catch (e: any) {

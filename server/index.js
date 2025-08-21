@@ -152,6 +152,65 @@ app.post('/api/tutorials/:id/steps', (req, res) => {
   res.json({ ok: true, stepCount: count });
 });
 
+// Tutorial generation endpoint
+app.post('/api/tutorials/generate', (req, res) => {
+  const title = (req.body?.title || 'Automated Tutorial').toString();
+  const actions = Array.isArray(req.body?.actions) ? req.body.actions : [];
+  const id = nanoid();
+  const now = Date.now();
+  insertTutorial.run(id, title, now, now);
+  const insert = db.transaction((items) => {
+    for (const a of items) insertStep.run(id, now, a.type || 'note', a.selector || null, a.key || null, a.title || null);
+    const count = listSteps.all(id).length;
+    updateTutorialCounts.run(count, Date.now(), id);
+    return count;
+  });
+  insert(actions);
+  res.json({ success: true, message: 'generated', data: { id } });
+});
+
+// Video uploads (metadata only for demo)
+let videos = [];
+app.get('/api/videos', (_req, res) => res.json({ success: true, data: videos }));
+app.post('/api/videos', (req, res) => {
+  const { title, url, thumbnailUrl } = req.body || {};
+  const item = { id: nanoid(), title: String(title||'Untitled Video'), url: String(url||''), thumbnailUrl: String(thumbnailUrl||''), createdAt: Date.now(), status: 'ready', views: 0 };
+  videos.unshift(item);
+  res.json({ success: true, data: item });
+});
+
+// API hub persistence (collections/requests) and proxy (demo-safe)
+let apiCollections = [];
+let apiRequests = [];
+app.get('/api/apihub/collections', (_req, res) => res.json({ success: true, data: apiCollections }));
+app.post('/api/apihub/collections', (req, res) => {
+  const { name, description } = req.body || {};
+  const c = { id: nanoid(), name: String(name||'Collection'), description: String(description||''), requests: [], createdAt: Date.now(), updatedAt: Date.now() };
+  apiCollections.unshift(c);
+  res.json({ success: true, data: c });
+});
+app.get('/api/apihub/requests', (_req, res) => res.json({ success: true, data: apiRequests }));
+app.post('/api/apihub/requests', (req, res) => {
+  const r = { id: nanoid(), ...(req.body||{}), createdAt: Date.now(), updatedAt: Date.now(), executionCount: 0, successRate: 100, averageResponseTime: 0 };
+  apiRequests.unshift(r);
+  res.json({ success: true, data: r });
+});
+app.post('/api/apihub/execute', async (req, res) => {
+  // Demo: do not call arbitrary external URLs; return simulated response
+  const response = { status: 200, statusText: 'OK', headers: { 'content-type': 'application/json' }, body: { ok: true, message: 'Executed (simulated)' }, responseTime: 123, size: 256 };
+  res.json({ success: true, data: response });
+});
+
+// CRM minimal endpoints
+let contacts = [];
+app.get('/api/crm/contacts', (_req, res) => res.json({ success: true, data: contacts }));
+app.post('/api/crm/contacts', (req, res) => {
+  const { firstName, lastName, email } = req.body || {};
+  const c = { id: nanoid(), firstName: String(firstName||''), lastName: String(lastName||''), email: String(email||''), createdAt: Date.now(), updatedAt: Date.now() };
+  contacts.unshift(c);
+  res.json({ success: true, data: c });
+});
+
 const upload = multer({ dest: storageDir, limits: { fileSize: 100 * 1024 * 1024 } });
 app.post('/api/tutorials/:id/media', upload.single('file'), (req, res) => {
   const t = getTutorial.get(req.params.id);
