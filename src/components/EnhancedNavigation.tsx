@@ -127,9 +127,21 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
       description: 'Video management platform'
     },
     { 
-      path: '/api', 
-      label: 'API Gateway', 
+      path: '/crm', 
+      label: 'CRM Suite', 
+      icon: Users,
+      description: 'Customer relationship management'
+    },
+    { 
+      path: '/app-builder', 
+      label: 'App Builder', 
       icon: Code,
+      description: 'Build and deploy applications'
+    },
+    { 
+      path: '/api-gateway', 
+      label: 'API Gateway', 
+      icon: Globe,
       description: 'API testing and management'
     },
     { 
@@ -171,8 +183,21 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
     { label: 'Create Tutorial', icon: Plus, action: () => {} },
     { label: 'New Workflow', icon: Workflow, action: () => {} },
     { label: 'Upload Video', icon: Video, action: () => {} },
-    { label: 'API Test', icon: Code, action: () => {} },
+    { label: 'Add Contact', icon: Users, action: () => {} },
+    { label: 'New App', icon: Code, action: () => {} },
+    { label: 'API Test', icon: Globe, action: () => {} },
   ];
+
+  const prefetchRoute = (path: string) => {
+    try {
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.as = 'document';
+      link.href = path;
+      document.head.appendChild(link);
+      setTimeout(() => document.head.removeChild(link), 5000);
+    } catch {}
+  };
 
   return (
     <>
@@ -226,7 +251,9 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
                   >
-                    <Link to={item.path}>
+                    <Link to={item.path} onMouseEnter={() => {
+                      if (['/tutorial-builder','/videos','/api'].includes(item.path)) prefetchRoute(item.path);
+                    }}>
                       <Button
                         variant={isActive(item.path) ? 'default' : 'ghost'}
                         size="sm"

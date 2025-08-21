@@ -8,6 +8,7 @@ import { Checkbox } from './ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { tutorialManager, TutorialSearchParams, TutorialSearchResponse, Tutorial } from '../lib/tutorials';
 import { TutorialForm } from './TutorialForm';
+import { Skeleton } from './ui/skeleton';
 
 interface TutorialSearchProps {
   onTutorialSelect?: (tutorial: Tutorial) => void;
@@ -93,6 +94,23 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
       alert('Failed to update tutorial status. Please try again.');
     }
   };
+
+  const renderSkeletons = () => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="bg-card border border-border rounded-lg p-4">
+          <Skeleton className="w-full h-36 mb-3" />
+          <div className="flex gap-2 mb-2">
+            <Skeleton className="w-16 h-5" />
+            <Skeleton className="w-16 h-5" />
+          </div>
+          <Skeleton className="w-2/3 h-5 mb-2" />
+          <Skeleton className="w-full h-4 mb-2" />
+          <Skeleton className="w-1/2 h-4" />
+        </div>
+      ))}
+    </div>
+  );
 
   const renderTutorialCard = (tutorial: Tutorial) => (
     <div
@@ -222,33 +240,20 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
           {tutorial.category}
         </Badge>
       </div>
-      
-      {/* Stats */}
+
+      {/* Metrics */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          <span>{tutorial.estimatedDuration}m</span>
+          <span>{tutorial.estimatedDuration} min</span>
         </div>
         <div className="flex items-center gap-1">
-          <Star className="h-3 w-3 fill-current" />
-          <span>{tutorial.rating?.average?.toFixed(1) || '0.0'}</span>
+          <Star className="h-3 w-3" />
+          <span>{tutorial.rating?.average || 0}/5</span>
         </div>
         <div className="flex items-center gap-1">
           <Eye className="h-3 w-3" />
           <span>{tutorial.viewCount || 0}</span>
-        </div>
-      </div>
-
-      {/* Steps Count */}
-      <div className="mt-2 pt-2 border-t border-border">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{tutorial.steps?.length || 0} steps</span>
-          <span className="text-primary font-medium">
-            {tutorial.completionStats?.completionRate ? 
-              `${Math.round(tutorial.completionStats.completionRate)}% completion` : 
-              'New'
-            }
-          </span>
         </div>
       </div>
     </div>
@@ -473,16 +478,7 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
       {/* Search Results */}
       <div className="space-y-4">
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-card border border-border rounded-lg p-4 animate-pulse">
-                <div className="aspect-video bg-muted rounded-md mb-3" />
-                <div className="h-4 bg-muted rounded mb-2" />
-                <div className="h-3 bg-muted rounded mb-3" />
-                <div className="h-3 bg-muted rounded w-2/3" />
-              </div>
-            ))}
-          </div>
+          renderSkeletons()
         ) : searchResults ? (
           <>
             <div className="flex items-center justify-between">

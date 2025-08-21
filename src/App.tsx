@@ -5,7 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { authManager } from './lib/auth';
+import { initializeAuth, useAuthStore } from './lib/auth';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -23,6 +23,12 @@ import TutorialAuto from './pages/TutorialAuto';
 import TutorialView from './pages/TutorialView';
 import VerifyEmail from './pages/VerifyEmail';
 import Reports from './pages/Reports';
+import VideoPlatform from './components/VideoPlatform';
+import ApiGateway from './components/ApiGateway';
+import CRMDashboard from './pages/CRMDashboard';
+import AppBuilder from './pages/AppBuilder';
+import VideoDetail from './pages/VideoDetail';
+import WorkflowExecution from './pages/WorkflowExecution';
 import './styles/animations.css';
 
 // Create a client
@@ -38,9 +44,10 @@ const queryClient = new QueryClient({
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
-  const isAuthenticated = demoModeEnabled || authManager.isAuthenticated();
+  const { isAuthenticated } = useAuthStore();
+  const authenticated = demoModeEnabled || isAuthenticated;
   
-  if (!isAuthenticated) {
+  if (!authenticated) {
     return <Navigate to="/login" replace />;
   }
   
@@ -49,7 +56,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirects authenticated users)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isAuthenticated = authManager.isAuthenticated();
+  const { isAuthenticated } = useAuthStore();
   
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -257,6 +264,58 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Reports />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Video Platform Routes */}
+            <Route path="/videos" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VideoPlatform />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/videos/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VideoDetail />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* CRM Routes */}
+            <Route path="/crm" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CRMDashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* App Builder Routes */}
+            <Route path="/app-builder" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AppBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* API Gateway Routes */}
+            <Route path="/api-gateway" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ApiGateway />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Workflow Execution Routes */}
+            <Route path="/workflows/:id/execute" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <WorkflowExecution />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
