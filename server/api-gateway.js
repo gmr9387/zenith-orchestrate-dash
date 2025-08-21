@@ -80,6 +80,17 @@ class ApiGateway {
       CREATE INDEX IF NOT EXISTS idx_api_requests_api_key_id ON api_requests(apiKeyId);
     `);
 
+    // Defensive: ensure api_keys.rateLimit exists (older DBs may not have it)
+    try {
+      const info = this.db.prepare("PRAGMA table_info('api_keys')").all();
+      const hasRateLimit = info.some((c) => c.name === 'rateLimit');
+      if (!hasRateLimit) {
+        this.db.exec("ALTER TABLE api_keys ADD COLUMN rateLimit INTEGER DEFAULT 100");
+      }
+    } catch (e) {
+      // ignore if pragma/alter fails
+    }
+
     // Prepared statements
     this.insertEndpoint = this.db.prepare(`
       INSERT INTO api_endpoints (id, name, description, path, method, targetUrl, headers, timeout, rateLimit, createdBy, createdAt, updatedAt)
@@ -382,75 +393,57 @@ class ApiGateway {
     });
 
     // Dynamic route handler for all API endpoints
-    this.router.all('*', async (req, res) => {
-      const endpoint = this.getEndpoint.get(req.path, req.method);
-      
-      if (!endpoint) {
-        return res.status(404).json({
-          error: {
-            code: 'endpoint_not_found',
-            message: 'API endpoint not found'
-          }
-        });
-      }
-
-      const startTime = Date.now();
-      let responseBody = '';
-      let statusCode = 500;
-      let error = null;
-
+    this.router.use(async (req, res, next) => {
+      // Skip if this request matched a defined route
+      // Since we are in a use() after declared routes, treat as catch-all
       try {
-        // Prepare headers
-        const headers = endpoint.headers ? JSON.parse(endpoint.headers) : {};
-        const requestHeaders = {
-          'Content-Type': req.headers['content-type'] || 'application/json',
-          ...headers
-        };
+        const endpoint = this.getEndpoint.get(req.path, req.method);
+        if (!endpoint) return next();
 
-        // Make request to target URL
-        const response = await fetch(endpoint.targetUrl, {
-          method: req.method,
-          headers: requestHeaders,
-          body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-          signal: AbortSignal.timeout(endpoint.timeout || 30000)
-        });
+        const startTime = Date.now();
+        let responseBody = '';
+        let statusCode = 500;
+        let error = null;
 
-        statusCode = response.status;
-        responseBody = await response.text();
+        try {
+          const headers = endpoint.headers ? JSON.parse(endpoint.headers) : {};
+          const requestHeaders = {
+            'Content-Type': req.headers['content-type'] || 'application/json',
+            ...headers
+          };
 
-        // Set response headers
-        Object.entries(response.headers).forEach(([key, value]) => {
-          res.setHeader(key, value);
-        });
+          const response = await fetch(endpoint.targetUrl, {
+            method: req.method,
+            headers: requestHeaders,
+            body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+            signal: AbortSignal.timeout(endpoint.timeout || 30000)
+          });
 
-        res.status(statusCode).send(responseBody);
-      } catch (err) {
-        error = err.message;
-        res.status(500).json({
-          error: {
-            code: 'gateway_error',
-            message: 'Failed to proxy request'
+          statusCode = response.status;
+          responseBody = await response.text();
+
+          for (const [key, value] of response.headers) {
+            res.setHeader(key, value);
           }
-        });
-      } finally {
-        // Log request
-        const responseTime = Date.now() - startTime;
-        this.insertRequest.run(
-          nanoid(),
-          endpoint.id,
-          req.apiKey?.id || null,
-          req.user?.id || null,
-          req.method,
-          req.path,
-          statusCode,
-          responseTime,
-          req.ip,
-          req.headers['user-agent']?.substring(0, 100),
-          req.method !== 'GET' ? JSON.stringify(req.body) : null,
-          responseBody.substring(0, 1000), // Limit response body logging
-          error,
-          new Date().toISOString()
-        );
+
+          res.status(statusCode).send(responseBody);
+        } catch (err) {
+          error = err.message;
+          res.status(500).json({
+            error: { code: 'gateway_error', message: 'Failed to proxy request' }
+          });
+        } finally {
+          const responseTime = Date.now() - startTime;
+          this.insertRequest.run(
+            nanoid(), endpoint.id, req.apiKey?.id || null, req.user?.id || null,
+            req.method, req.path, statusCode, responseTime, req.ip,
+            req.headers['user-agent']?.substring(0, 100),
+            req.method !== 'GET' ? JSON.stringify(req.body) : null,
+            responseBody.substring(0, 1000), error, new Date().toISOString()
+          );
+        }
+      } catch (e) {
+        return next(e);
       }
     });
   }

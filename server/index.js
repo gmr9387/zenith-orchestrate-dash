@@ -14,7 +14,8 @@ import jwt from 'jsonwebtoken';
 
 
 // Import video processor, API gateway, CRM system, and App Builder
-import VideoProcessor from './video-processor.js';
+// Lazy-load video processor to avoid test env ffmpeg resolution issues
+let VideoProcessor = null;
 import ApiGateway from './api-gateway.js';
 import CRMSystem from './crm.js';
 import AppBuilder from './app-builder.js';
@@ -976,6 +977,16 @@ async function processVideoAsync(videoId, originalPath, userId) {
     updateVideo.run(
       'Untitled Video', '', '', '', '', 0, 0, 'processing', 0, new Date().toISOString(), videoId
     );
+
+    // Lazy-load and instantiate processor
+    if (VideoProcessor === null) {
+      const mod = await import('./video-processor.js');
+      VideoProcessor = mod.default;
+    }
+    const videoProcessor = new VideoProcessor({
+      outputDir: path.join(dataDir, 'processed-videos'),
+      thumbnailDir: path.join(dataDir, 'thumbnails')
+    });
 
     // Process video
     const result = await videoProcessor.processVideo(originalPath, {
