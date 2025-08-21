@@ -174,6 +174,17 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
     { label: 'API Test', icon: Code, action: () => {} },
   ];
 
+  const prefetchRoute = (path: string) => {
+    try {
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.as = 'document';
+      link.href = path;
+      document.head.appendChild(link);
+      setTimeout(() => document.head.removeChild(link), 5000);
+    } catch {}
+  };
+
   return (
     <>
       {/* Enhanced Navigation Bar */}
@@ -226,7 +237,9 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
                   >
-                    <Link to={item.path}>
+                    <Link to={item.path} onMouseEnter={() => {
+                      if (['/tutorial-builder','/videos','/api'].includes(item.path)) prefetchRoute(item.path);
+                    }}>
                       <Button
                         variant={isActive(item.path) ? 'default' : 'ghost'}
                         size="sm"

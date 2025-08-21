@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { db, TutorialStep, TutorialDoc, TutorialMedia } from "@/lib/db";
 import { hasBackend, apiGet } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+
+function formatTime(seconds: number) {
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  const m = Math.floor((seconds / 60) % 60).toString().padStart(2, '0');
+  const h = Math.floor(seconds / 3600);
+  return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+}
 
 export default function TutorialView() {
   const { id } = useParams();
@@ -10,6 +17,9 @@ export default function TutorialView() {
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   const [idx, setIdx] = useState(0);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -38,11 +48,29 @@ export default function TutorialView() {
     })();
   }, [id]);
 
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onTime = () => setCurrentTime(v.currentTime || 0);
+    const onLoaded = () => setDuration(v.duration || 0);
+    v.addEventListener('timeupdate', onTime);
+    v.addEventListener('loadedmetadata', onLoaded);
+    return () => {
+      v.removeEventListener('timeupdate', onTime);
+      v.removeEventListener('loadedmetadata', onLoaded);
+    };
+  }, [mediaUrl]);
+
   const current = steps[idx];
   const progress = useMemo(() => (steps.length ? Math.round(((idx + 1) / steps.length) * 100) : 0), [idx, steps.length]);
 
   function next() { setIdx((i) => Math.min(i + 1, steps.length - 1)); }
   function prev() { setIdx((i) => Math.max(i - 1, 0)); }
+
+  const seek = (delta: number) => {
+    const v = videoRef.current; if (!v) return;
+    v.currentTime = Math.max(0, Math.min((v.currentTime || 0) + delta, v.duration || 0));
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -52,7 +80,16 @@ export default function TutorialView() {
       </div>
       {mediaUrl && (
         <div className="mb-4 rounded-lg overflow-hidden border">
-          <video src={mediaUrl} controls className="w-full h-auto" />
+          <video ref={videoRef} src={mediaUrl} controls className="w-full h-auto" />
+          <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground border-t bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => seek(-5)}>−5s</Button>
+              <Button size="sm" variant="ghost" onClick={() => seek(+5)}>+5s</Button>
+            </div>
+            <div>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
         </div>
       )}
       <div className="mb-4 h-2 bg-muted rounded">

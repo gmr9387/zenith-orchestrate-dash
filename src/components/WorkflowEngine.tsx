@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -32,6 +32,7 @@ import {
   Cpu,
   Network
 } from 'lucide-react';
+import { hasBackend, apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
 
 interface WorkflowNode {
   id: string;
@@ -66,6 +67,20 @@ const WorkflowEngine: React.FC = () => {
     name: '',
     description: '',
   });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!hasBackend()) return;
+        const list = await apiGet<Workflow[]>('/api/workflows');
+        setWorkflows(list);
+        if (list.length && !selectedWorkflow) setSelectedWorkflow(list[0]);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to load workflows', e);
+      }
+    })();
+  }, []);
 
   // Available triggers
   const availableTriggers = [
@@ -166,8 +181,8 @@ const WorkflowEngine: React.FC = () => {
     }
   ];
 
-  const createWorkflow = () => {
-    const workflow: Workflow = {
+  const createWorkflow = async () => {
+    const wf: Workflow = {
       id: `wf_${Date.now()}`,
       name: newWorkflow.name,
       description: newWorkflow.description,
@@ -180,13 +195,44 @@ const WorkflowEngine: React.FC = () => {
       updatedAt: new Date().toISOString(),
     };
 
-    setWorkflows(prev => [...prev, workflow]);
-    setSelectedWorkflow(workflow);
-    setShowCreateModal(false);
-    setNewWorkflow({ name: '', description: '' });
+    try {
+      if (hasBackend()) {
+        const created = await apiPost<Workflow>('/api/workflows', { name: wf.name, description: wf.description });
+        setWorkflows(prev => [created, ...prev]);
+        setSelectedWorkflow(created);
+      } else {
+        setWorkflows(prev => [wf, ...prev]);
+        setSelectedWorkflow(wf);
+      }
+      setShowCreateModal(false);
+      setNewWorkflow({ name: '', description: '' });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create workflow', e);
+    }
   };
 
-  const addNode = (workflowId: string, nodeType: WorkflowNode['type'], position: { x: number; y: number }) => {
+  const persistWorkflow = async (workflow: Workflow) => {
+    try {
+      if (!hasBackend()) return;
+      const updated = await apiPut<Workflow>(`/api/workflows/${workflow.id}`, {
+        name: workflow.name,
+        description: workflow.description,
+        isActive: workflow.isActive,
+        nodes: workflow.nodes,
+        lastRun: workflow.lastRun,
+        runCount: workflow.runCount,
+        successRate: workflow.successRate,
+      });
+      setWorkflows(prev => prev.map(w => w.id === workflow.id ? updated : w));
+      if (selectedWorkflow?.id === workflow.id) setSelectedWorkflow(updated);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to persist workflow', e);
+    }
+  };
+
+  const addNode = async (workflowId: string, nodeType: WorkflowNode['type'], position: { x: number; y: number }) => {
     const workflow = workflows.find(w => w.id === workflowId);
     if (!workflow) return;
 
@@ -209,20 +255,31 @@ const WorkflowEngine: React.FC = () => {
 
     setWorkflows(prev => prev.map(w => w.id === workflowId ? updatedWorkflow : w));
     setSelectedWorkflow(updatedWorkflow);
+    await persistWorkflow(updatedWorkflow);
   };
 
-  const toggleWorkflow = (workflowId: string) => {
-    setWorkflows(prev => prev.map(w => 
-      w.id === workflowId ? { ...w, isActive: !w.isActive } : w
-    ));
+  const toggleWorkflow = async (workflowId: string) => {
+    const workflow = workflows.find(w => w.id === workflowId);
+    if (!workflow) return;
+    const updated = { ...workflow, isActive: !workflow.isActive, updatedAt: new Date().toISOString() };
+    setWorkflows(prev => prev.map(w => w.id === workflowId ? updated : w));
+    if (selectedWorkflow?.id === workflowId) setSelectedWorkflow(updated);
+    await persistWorkflow(updated);
   };
 
-  const deleteWorkflow = (workflowId: string) => {
-    if (confirm('Are you sure you want to delete this workflow? This action cannot be undone.')) {
+  const deleteWorkflow = async (workflowId: string) => {
+    if (!confirm('Are you sure you want to delete this workflow? This action cannot be undone.')) return;
+    try {
+      if (hasBackend()) {
+        await apiDelete(`/api/workflows/${workflowId}`);
+      }
       setWorkflows(prev => prev.filter(w => w.id !== workflowId));
       if (selectedWorkflow?.id === workflowId) {
         setSelectedWorkflow(null);
       }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete workflow', e);
     }
   };
 
