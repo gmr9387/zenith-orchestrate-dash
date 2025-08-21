@@ -46,7 +46,34 @@ import {
   MoreHorizontal,
   CheckCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+let motion: { [key: string]: React.ComponentType<any> } | undefined;
+let AnimatePresence: React.ComponentType<any> | undefined;
+
+const createMotionFallback = () =>
+  new Proxy(
+    {},
+    {
+      get: () =>
+        ({ children, ...rest }: any) => (
+          <div {...rest}>{children}</div>
+        ),
+    }
+  ) as unknown as { [key: string]: React.ComponentType<any> };
+// Defer framer-motion to client after hydration to avoid top-level await
+if (typeof window !== 'undefined') {
+  import('framer-motion')
+    .then((mod) => {
+      motion = mod.motion;
+      AnimatePresence = mod.AnimatePresence;
+    })
+    .catch(() => {
+      motion = createMotionFallback();
+      AnimatePresence = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+    });
+} else {
+  motion = createMotionFallback();
+  AnimatePresence = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+}
 
 interface User {
   _id: string;

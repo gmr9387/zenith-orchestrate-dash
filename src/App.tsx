@@ -6,7 +6,7 @@ const ReactQueryDevtoolsLazy = import.meta.env.DEV
   ? lazy(() => import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })))
   : (null as unknown as React.FC<{ initialIsOpen?: boolean }>);
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/toaster";
+// Use a single toast system (Sonner)
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { authManager } from './lib/auth';
 
@@ -272,7 +272,6 @@ function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
-        <Toaster />
         <Sonner />
       </TooltipProvider>
       
@@ -283,6 +282,17 @@ function App() {
       )}
     </QueryClientProvider>
   );
+}
+
+// Prefetch likely-next routes after a short idle to improve perceived nav speed
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    Promise.all([
+      import('./pages/Tutorials'),
+      import('./pages/Reports'),
+      import('./pages/TutorialBuilder'),
+    ]).catch(() => {});
+  }, 1500);
 }
 
 export default App;

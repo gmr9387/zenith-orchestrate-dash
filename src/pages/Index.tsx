@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,12 +8,12 @@ import {
   Play, Plus, Calendar, Settings, Search, Command,
   TrendingUp, Activity, ExternalLink, Bell, BookOpen, Filter
 } from 'lucide-react';
-import { CommandPalette } from '@/components/CommandPalette';
+// Removed unused CommandPalette to reduce bundle size
 import { HeroMetrics } from '@/components/HeroMetrics';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { ToolCard } from '@/components/ToolCard';
 import { toast } from '@/components/ui/sonner';
-import { NetworkVisualization } from '@/components/NetworkVisualization';
+const NetworkVisualization = lazy(() => import('@/components/NetworkVisualization').then(m => ({ default: m.NetworkVisualization })));
 import { apiClient } from '@/lib/api';
 
 // Import hero images
@@ -268,7 +268,9 @@ const Index: React.FC = () => {
           ]}
         >
           <div className="mb-4">
-            <NetworkVisualization />
+            <Suspense fallback={<div className="text-sm text-purple-300">Loading visualization…</div>}>
+              <NetworkVisualization />
+            </Suspense>
           </div>
         </ToolCard>
 

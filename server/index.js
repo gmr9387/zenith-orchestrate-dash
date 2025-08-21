@@ -2,6 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import compression from 'compression';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
@@ -9,6 +10,7 @@ import sqlite3 from 'better-sqlite3';
 
 const PORT = process.env.PORT || 4000;
 const app = express();
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
@@ -108,6 +110,8 @@ app.get('/api/tutorials/:id/media', (req, res) => {
   const m = getMedia.get(req.params.id);
   if (!m) return res.status(404).json({ error: 'not_found' });
   res.setHeader('Content-Type', m.mimeType);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.setHeader('ETag', `${m.tutorialId}-${m.size}-${m.createdAt}`);
   fs.createReadStream(m.path).pipe(res);
 });
 
