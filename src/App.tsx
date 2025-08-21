@@ -29,6 +29,7 @@ const TutorialView = lazy(() => import('./pages/TutorialView'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Reports = lazy(() => import('./pages/Reports'));
 const AppBuilder = lazy(() => import('./pages/AppBuilder'));
+const CRM = lazy(() => import('./pages/CRM'));
 import './styles/animations.css';
 
 // Create a client
@@ -271,6 +272,14 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Reports />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/crm" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CRM />
                 </DashboardLayout>
               </ProtectedRoute>
             } />

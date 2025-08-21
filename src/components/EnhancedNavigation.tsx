@@ -27,6 +27,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
     { path: '/', label: 'Dashboard', icon: Home, description: 'Overview and analytics' },
     { path: '/tutorial-builder', label: 'Tutorial Builder', icon: Target, description: 'Create and manage tutorials' },
     { path: '/app-builder', label: 'App Builder', icon: Code, description: 'Build apps from schema' },
+    { path: '/crm', label: 'CRM', icon: Users, description: 'Manage contacts' },
     { path: '/tutorials', label: 'Library', icon: BookOpen, description: 'Browse tutorials' },
     { path: '/reports', label: 'Reports', icon: Code, description: 'Analytics and insights' },
     { path: '/profile', label: 'Profile', icon: Users, description: 'User settings' },

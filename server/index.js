@@ -55,6 +55,65 @@ db.exec(`
     createdAt INTEGER NOT NULL,
     FOREIGN KEY (tutorialId) REFERENCES tutorials(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS workflows (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    isActive INTEGER NOT NULL DEFAULT 0,
+    lastRun INTEGER,
+    runCount INTEGER NOT NULL DEFAULT 0,
+    successRate INTEGER NOT NULL DEFAULT 100,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS app_schemas (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    schema TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    thumbnailUrl TEXT,
+    status TEXT NOT NULL,
+    views INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS api_collections (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS api_requests (
+    id TEXT PRIMARY KEY,
+    collectionId TEXT,
+    name TEXT NOT NULL,
+    method TEXT NOT NULL,
+    url TEXT NOT NULL,
+    headers TEXT,
+    params TEXT,
+    body TEXT,
+    description TEXT,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    executionCount INTEGER NOT NULL DEFAULT 0,
+    averageResponseTime REAL NOT NULL DEFAULT 0,
+    successRate REAL NOT NULL DEFAULT 100,
+    FOREIGN KEY (collectionId) REFERENCES api_collections(id) ON DELETE SET NULL
+  );
+  CREATE TABLE IF NOT EXISTS contacts (
+    id TEXT PRIMARY KEY,
+    firstName TEXT NOT NULL,
+    lastName TEXT NOT NULL,
+    email TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
 `);
 
 const insertTutorial = db.prepare('INSERT INTO tutorials (id, title, createdAt, updatedAt, stepCount) VALUES (?, ?, ?, ?, 0)');
@@ -169,31 +228,46 @@ app.post('/api/tutorials/generate', (req, res) => {
   res.json({ success: true, message: 'generated', data: { id } });
 });
 
-// Video uploads (metadata only for demo)
-let videos = [];
-app.get('/api/videos', (_req, res) => res.json({ success: true, data: videos }));
+// Video uploads (metadata)
+const listVideos = db.prepare('SELECT * FROM videos ORDER BY createdAt DESC');
+const insertVideo = db.prepare('INSERT INTO videos (id, title, url, thumbnailUrl, status, views, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+app.get('/api/videos', (_req, res) => res.json({ success: true, data: listVideos.all() }));
 app.post('/api/videos', (req, res) => {
   const { title, url, thumbnailUrl } = req.body || {};
-  const item = { id: nanoid(), title: String(title||'Untitled Video'), url: String(url||''), thumbnailUrl: String(thumbnailUrl||''), createdAt: Date.now(), status: 'ready', views: 0 };
-  videos.unshift(item);
+  const id = nanoid();
+  const now = Date.now();
+  insertVideo.run(id, String(title||'Untitled Video'), String(url||''), String(thumbnailUrl||''), 'ready', 0, now);
+  const item = { id, title: String(title||'Untitled Video'), url: String(url||''), thumbnailUrl: String(thumbnailUrl||''), status: 'ready', views: 0, createdAt: now };
   res.json({ success: true, data: item });
 });
 
-// API hub persistence (collections/requests) and proxy (demo-safe)
-let apiCollections = [];
-let apiRequests = [];
-app.get('/api/apihub/collections', (_req, res) => res.json({ success: true, data: apiCollections }));
+// API hub persistence (collections/requests) and proxy (simulated execute)
+const listCollections = db.prepare('SELECT * FROM api_collections ORDER BY updatedAt DESC');
+const insertCollection = db.prepare('INSERT INTO api_collections (id, name, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)');
+app.get('/api/apihub/collections', (_req, res) => res.json({ success: true, data: listCollections.all() }));
 app.post('/api/apihub/collections', (req, res) => {
   const { name, description } = req.body || {};
-  const c = { id: nanoid(), name: String(name||'Collection'), description: String(description||''), requests: [], createdAt: Date.now(), updatedAt: Date.now() };
-  apiCollections.unshift(c);
-  res.json({ success: true, data: c });
+  const id = nanoid();
+  const now = Date.now();
+  insertCollection.run(id, String(name||'Collection'), String(description||''), now, now);
+  res.json({ success: true, data: { id, name: String(name||'Collection'), description: String(description||''), createdAt: now, updatedAt: now } });
 });
-app.get('/api/apihub/requests', (_req, res) => res.json({ success: true, data: apiRequests }));
+const listRequests = db.prepare('SELECT * FROM api_requests ORDER BY updatedAt DESC');
+const insertRequest = db.prepare('INSERT INTO api_requests (id, collectionId, name, method, url, headers, params, body, description, createdAt, updatedAt, executionCount, averageResponseTime, successRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+app.get('/api/apihub/requests', (_req, res) => res.json({ success: true, data: listRequests.all() }));
 app.post('/api/apihub/requests', (req, res) => {
-  const r = { id: nanoid(), ...(req.body||{}), createdAt: Date.now(), updatedAt: Date.now(), executionCount: 0, successRate: 100, averageResponseTime: 0 };
-  apiRequests.unshift(r);
-  res.json({ success: true, data: r });
+  const id = nanoid();
+  const now = Date.now();
+  const {
+    collectionId = null,
+    name = 'Request', method = 'GET', url = '', headers = {}, params = {}, body = '', description = ''
+  } = req.body || {};
+  insertRequest.run(
+    id,
+    collectionId ? String(collectionId) : null,
+    String(name), String(method), String(url), JSON.stringify(headers), JSON.stringify(params), String(body), String(description), now, now, 0, 0, 100
+  );
+  res.json({ success: true, data: { id, collectionId, name, method, url, headers, params, body, description, createdAt: now, updatedAt: now, executionCount: 0, averageResponseTime: 0, successRate: 100 } });
 });
 app.post('/api/apihub/execute', async (req, res) => {
   // Demo: do not call arbitrary external URLs; return simulated response
@@ -201,14 +275,27 @@ app.post('/api/apihub/execute', async (req, res) => {
   res.json({ success: true, data: response });
 });
 
-// CRM minimal endpoints
-let contacts = [];
-app.get('/api/crm/contacts', (_req, res) => res.json({ success: true, data: contacts }));
+// CRM contacts
+const listContacts = db.prepare('SELECT * FROM contacts ORDER BY updatedAt DESC');
+const insertContact = db.prepare('INSERT INTO contacts (id, firstName, lastName, email, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)');
+const updateContact = db.prepare('UPDATE contacts SET firstName=?, lastName=?, email=?, updatedAt=? WHERE id=?');
+const deleteContact = db.prepare('DELETE FROM contacts WHERE id=?');
+app.get('/api/crm/contacts', (_req, res) => res.json({ success: true, data: listContacts.all() }));
 app.post('/api/crm/contacts', (req, res) => {
   const { firstName, lastName, email } = req.body || {};
-  const c = { id: nanoid(), firstName: String(firstName||''), lastName: String(lastName||''), email: String(email||''), createdAt: Date.now(), updatedAt: Date.now() };
-  contacts.unshift(c);
-  res.json({ success: true, data: c });
+  const id = nanoid();
+  const now = Date.now();
+  insertContact.run(id, String(firstName||''), String(lastName||''), String(email||''), now, now);
+  res.json({ success: true, data: { id, firstName: String(firstName||''), lastName: String(lastName||''), email: String(email||''), createdAt: now, updatedAt: now } });
+});
+app.put('/api/crm/contacts/:id', (req, res) => {
+  const { firstName, lastName, email } = req.body || {};
+  updateContact.run(String(firstName||''), String(lastName||''), String(email||''), Date.now(), req.params.id);
+  res.json({ success: true });
+});
+app.delete('/api/crm/contacts/:id', (req, res) => {
+  deleteContact.run(req.params.id);
+  res.json({ success: true });
 });
 
 const upload = multer({ dest: storageDir, limits: { fileSize: 100 * 1024 * 1024 } });
@@ -231,51 +318,54 @@ app.get('/api/tutorials/:id/media', (req, res) => {
   fs.createReadStream(m.path).pipe(res);
 });
 
-// Basic Workflow CRUD in-memory for demo
-let workflows = [];
+// Workflow CRUD (db-backed)
+const listWorkflows = db.prepare('SELECT * FROM workflows ORDER BY updatedAt DESC');
+const insertWorkflow = db.prepare('INSERT INTO workflows (id, name, description, isActive, lastRun, runCount, successRate, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const updateWorkflow = db.prepare('UPDATE workflows SET name=?, description=?, isActive=?, lastRun=?, runCount=?, successRate=?, updatedAt=? WHERE id=?');
+const deleteWorkflowStmt = db.prepare('DELETE FROM workflows WHERE id=?');
 app.get('/api/workflows', (_req, res) => {
-  res.json({ success: true, message: 'ok', data: workflows });
+  res.json({ success: true, message: 'ok', data: listWorkflows.all() });
 });
 app.post('/api/workflows', (req, res) => {
   const { name, description } = req.body || {};
-  const wf = { id: nanoid(), name: String(name||'Untitled'), description: String(description||''), nodes: [], isActive: false, lastRun: null, runCount: 0, successRate: 100, createdAt: Date.now(), updatedAt: Date.now() };
-  workflows.unshift(wf);
-  res.json({ success: true, message: 'created', data: wf });
+  const id = nanoid();
+  const now = Date.now();
+  insertWorkflow.run(id, String(name||'Untitled'), String(description||''), 0, null, 0, 100, now, now);
+  res.json({ success: true, message: 'created', data: { id, name: String(name||'Untitled'), description: String(description||''), isActive: 0, lastRun: null, runCount: 0, successRate: 100, createdAt: now, updatedAt: now } });
 });
 app.put('/api/workflows/:id', (req, res) => {
-  const idx = workflows.findIndex(w => w.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'not_found' });
-  workflows[idx] = { ...workflows[idx], ...req.body, updatedAt: Date.now() };
-  res.json({ success: true, message: 'updated', data: workflows[idx] });
+  const { name, description, isActive, lastRun, runCount, successRate } = req.body || {};
+  updateWorkflow.run(name ?? '', description ?? '', isActive ? 1 : 0, lastRun ?? null, runCount ?? 0, successRate ?? 100, Date.now(), req.params.id);
+  res.json({ success: true, message: 'updated' });
 });
 app.delete('/api/workflows/:id', (req, res) => {
-  const before = workflows.length;
-  workflows = workflows.filter(w => w.id !== req.params.id);
-  if (workflows.length === before) return res.status(404).json({ success: false, message: 'not_found' });
+  deleteWorkflowStmt.run(req.params.id);
   res.json({ success: true, message: 'deleted' });
 });
 
-// App Builder: simple schema storage in memory
-let appSchemas = [];
+// App Builder: schema storage in DB
+const listAppSchemas = db.prepare('SELECT * FROM app_schemas ORDER BY updatedAt DESC');
+const insertAppSchema = db.prepare('INSERT INTO app_schemas (id, name, schema, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)');
+const updateAppSchema = db.prepare('UPDATE app_schemas SET name=?, schema=?, updatedAt=? WHERE id=?');
+const deleteAppSchema = db.prepare('DELETE FROM app_schemas WHERE id=?');
 app.get('/api/app-schemas', (_req, res) => {
-  res.json({ success: true, message: 'ok', data: appSchemas });
+  const rows = listAppSchemas.all().map(r => ({ ...r, schema: JSON.parse(r.schema) }));
+  res.json({ success: true, message: 'ok', data: rows });
 });
 app.post('/api/app-schemas', (req, res) => {
   const { name, schema } = req.body || {};
-  const item = { id: nanoid(), name: String(name||'Untitled App'), schema: schema ?? {}, createdAt: Date.now(), updatedAt: Date.now() };
-  appSchemas.unshift(item);
-  res.json({ success: true, message: 'created', data: item });
+  const id = nanoid();
+  const now = Date.now();
+  insertAppSchema.run(id, String(name||'Untitled App'), JSON.stringify(schema ?? {}), now, now);
+  res.json({ success: true, message: 'created', data: { id, name: String(name||'Untitled App'), schema: schema ?? {}, createdAt: now, updatedAt: now } });
 });
 app.put('/api/app-schemas/:id', (req, res) => {
-  const idx = appSchemas.findIndex(a => a.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'not_found' });
-  appSchemas[idx] = { ...appSchemas[idx], ...req.body, updatedAt: Date.now() };
-  res.json({ success: true, message: 'updated', data: appSchemas[idx] });
+  const { name, schema } = req.body || {};
+  updateAppSchema.run(String(name||'Untitled App'), JSON.stringify(schema ?? {}), Date.now(), req.params.id);
+  res.json({ success: true, message: 'updated' });
 });
 app.delete('/api/app-schemas/:id', (req, res) => {
-  const before = appSchemas.length;
-  appSchemas = appSchemas.filter(a => a.id !== req.params.id);
-  if (appSchemas.length === before) return res.status(404).json({ success: false, message: 'not_found' });
+  deleteAppSchema.run(req.params.id);
   res.json({ success: true, message: 'deleted' });
 });
 

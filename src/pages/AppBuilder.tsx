@@ -36,9 +36,7 @@ const AppBuilder: React.FC = () => {
           const data = (resp as any).data;
           if (Array.isArray(data)) setItems(data as AppSchemaItem[]);
         }
-      } catch (e) {
-        // ignore load errors in demo mode
-      }
+      } catch (e) { /* routed to UX toast in future */ }
     })();
   }, []);
 
@@ -76,7 +74,7 @@ const AppBuilder: React.FC = () => {
       if (hasBackend()) await apiDelete(`/app-schemas/${item.id}`);
       setItems(prev => prev.filter(it => it.id !== item.id));
       if (selected?.id === item.id) setSelected(null);
-    } catch {}
+    } catch { /* ignore */ }
   };
 
   const preview = () => {
@@ -195,4 +193,3 @@ const AppBuilder: React.FC = () => {
 };
 
 export default AppBuilder;
-
