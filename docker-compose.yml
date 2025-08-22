@@ -1,0 +1,47 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zilliance
+      POSTGRES_PASSWORD: zilliance
+      POSTGRES_DB: zilliance
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      ALLOWED_ORIGIN: http://localhost:8080
+      JWT_SECRET: change-me
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://zilliance:zilliance@postgres:5432/zilliance
+      METRICS_ENABLED: "true"
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./server:/app/server
+      - server-data:/app/server
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+volumes:
+  pgdata:
+  server-data:
