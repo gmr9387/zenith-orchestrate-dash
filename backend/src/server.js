@@ -15,6 +15,7 @@ import { logger } from './utils/logger.js';
 import authRoutes from './routes/auth.js';
 import tutorialRoutes from './routes/tutorials.js';
 import storageRoutes from './routes/storage.js';
+import smsRoutes from './routes/sms.js';
 
 // Load environment variables
 dotenv.config();
@@ -249,6 +250,23 @@ app.post('/api/v1/tutorials', (req, res) => {
     success: true,
     message: 'Tutorial created successfully',
     data: newTutorial,
+  });
+});
+
+// API Routes
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/tutorials', tutorialRoutes);
+app.use('/api/v1/storage', storageRoutes);
+app.use('/api/v1/sms', smsRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Zilliance Backend Server is running',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    environment: NODE_ENV
   });
 });
 
