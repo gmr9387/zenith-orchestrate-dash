@@ -329,7 +329,13 @@ class CRMSystem {
         });
       }
 
-      const contactData = parsed.data;
+      // Load existing contact and merge
+      const existing = this.getContact.get(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: { code: 'not_found', message: 'Contact not found' } });
+      }
+
+      const contactData = { ...existing, ...parsed.data };
       const now = new Date().toISOString();
 
       try {
@@ -345,10 +351,10 @@ class CRMSystem {
           contactData.state || null,
           contactData.zipCode || null,
           contactData.country || null,
-          contactData.tags ? JSON.stringify(contactData.tags) : null,
+          contactData.tags ? JSON.stringify(contactData.tags) : existing.tags,
           contactData.notes || null,
           contactData.source || null,
-          contactData.status || 'active',
+          contactData.status || existing.status || 'active',
           contactData.assignedTo || null,
           now,
           req.params.id

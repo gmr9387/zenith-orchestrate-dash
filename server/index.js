@@ -1549,10 +1549,10 @@ app.post('/api/videos/:id/signed-url', authenticateToken, async (req, res) => {
 app.use('/api/gateway', apiGateway.getRouter());
 
 // CRM routes
-app.use('/api/crm', crmSystem.getRouter());
+app.use('/api/crm', authenticateToken, crmSystem.getRouter());
 
 // App Builder routes
-app.use('/api/app-builder', appBuilder.getRouter());
+app.use('/api/app-builder', authenticateToken, appBuilder.getRouter());
 
 // Advanced Video Platform routes
 app.post('/api/videos/:id/ai/captions', authenticateToken, async (req, res) => {
