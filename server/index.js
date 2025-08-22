@@ -499,6 +499,22 @@ const requireRole = (roles) => {
 	};
 };
 
+// Entitlements (plan-aware flags)
+const entitlements = {
+  free: { crmAdvanced: false, appBuilderPublish: true },
+  pro: { crmAdvanced: true, appBuilderPublish: true },
+  enterprise: { crmAdvanced: true, appBuilderPublish: true }
+};
+function requireEntitlement(flag) {
+  return (req, res, next) => {
+    const plan = req.user?.plan || 'pro';
+    if (!entitlements[plan]?.[flag]) {
+      return res.status(403).json({ error: { code: 'entitlement_required', message: `Feature requires ${flag}` } });
+    }
+    next();
+  };
+}
+
 // Audit logging helper
 const logAudit = (userId, action, resource, resourceId, details, req) => {
 	try {
@@ -1740,12 +1756,12 @@ app.post('/api/workflows/templates/:id/create', authenticateToken, (req, res) =>
 });
 
 // Advanced CRM routes
-app.get('/api/crm/advanced/dashboard', authenticateToken, requireRole(['admin','enterprise']), (req, res) => {
+app.get('/api/crm/advanced/dashboard', authenticateToken, requireRole(['admin','enterprise']), requireEntitlement('crmAdvanced'), (req, res) => {
   try {
     const stats = advancedCRM.getDashboardStats();
     res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get dashboard' });
   }
 });
 

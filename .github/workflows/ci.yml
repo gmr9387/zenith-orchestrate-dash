@@ -21,6 +21,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Security audit
+        run: npm audit --production --audit-level=high || true
+
       - name: Run migrations
         run: npm run migrate:up
 
@@ -37,3 +46,6 @@ jobs:
 
       - name: Build web
         run: npm run build --silent
+
+      - name: Performance budget gate
+        run: node scripts/perf-budget.js
