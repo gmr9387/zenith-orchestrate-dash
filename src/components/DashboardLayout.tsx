@@ -53,16 +53,18 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
+  const authenticated = demoModeEnabled || isAuthenticated;
 
   useEffect(() => {
     // Check authentication status
-    if (!isAuthenticated) {
+    if (!authenticated) {
       navigate('/login');
       return;
     }
 
     setIsLoading(false);
-  }, [isAuthenticated, navigate]);
+  }, [authenticated, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -112,7 +114,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     );
   }
 
-  if (!user || !isAuthenticated) {
+  if (!user && !authenticated) {
     navigate('/login');
     return null;
   }
@@ -120,7 +122,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900">
       {/* Enhanced Navigation */}
-      <EnhancedNavigation user={user} onLogout={handleLogout} />
+      <EnhancedNavigation user={user ?? null} onLogout={handleLogout} />
       
       {/* Main Content */}
       <main className="pt-16">
