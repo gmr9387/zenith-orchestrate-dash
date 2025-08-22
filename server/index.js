@@ -557,6 +557,31 @@ app.get('/metrics', async (req, res) => {
   res.end(await metricsRegistry.metrics());
 });
 
+// OpenAPI docs (minimal)
+app.get('/api/openapi.json', (_req, res) => {
+  const spec = {
+    openapi: '3.0.0',
+    info: { title: 'Zilliance API', version: '1.0.0' },
+    paths: {
+      '/api/health': { get: { summary: 'Health', responses: { '200': { description: 'OK' } } } },
+      '/api/auth/login': { post: { summary: 'Login', responses: { '200': { description: 'Token' } } } },
+      '/api/crm/contacts': { get: { summary: 'List contacts', responses: { '200': { description: 'OK' } } } },
+      '/api/app-builder/projects': { post: { summary: 'Create project', responses: { '201': { description: 'Created' } } } }
+    }
+  };
+  res.json(spec);
+});
+app.get('/api/docs', async (_req, res) => {
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"/></head>
+  <body><div id="swagger"></div>
+  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script>window.ui = SwaggerUIBundle({ url: '/api/openapi.json', dom_id: '#swagger' });</script>
+  </body></html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
 // Authentication routes
 const authLimiter = createRateLimiter({ limitPerMinute: 30 });
 app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -756,6 +781,12 @@ app.post('/api/tutorials', authenticateToken, (req, res) => {
 
 app.get('/api/tutorials', authenticateToken, (req, res) => {
 	const rows = req.user.role === 'admin' ? listTutorials.all() : listTutorialsByUser.all(req.user.id);
+	const etag = 'W/"' + rows.length + '-' + (rows[0]?.updatedAt || 0) + '"';
+	if (req.headers['if-none-match'] === etag) {
+		return res.status(304).end();
+	}
+	res.setHeader('ETag', etag);
+	res.setHeader('Cache-Control', 'private, max-age=30');
 	res.json(rows);
 });
 
@@ -781,6 +812,12 @@ app.get('/api/tutorials/:id', authenticateToken, (req, res) => {
 	}
 	
 	const steps = listSteps.all(req.params.id);
+	const etag = 'W/"' + t.updatedAt + '-' + steps.length + '"';
+	if (req.headers['if-none-match'] === etag) {
+		return res.status(304).end();
+	}
+	res.setHeader('ETag', etag);
+	res.setHeader('Cache-Control', 'private, max-age=60');
 	res.json({ ...t, steps });
 });
 
@@ -1703,7 +1740,7 @@ app.post('/api/workflows/templates/:id/create', authenticateToken, (req, res) =>
 });
 
 // Advanced CRM routes
-app.get('/api/crm/advanced/dashboard', authenticateToken, (req, res) => {
+app.get('/api/crm/advanced/dashboard', authenticateToken, requireRole(['admin','enterprise']), (req, res) => {
   try {
     const stats = advancedCRM.getDashboardStats();
     res.json(stats);
@@ -1834,6 +1871,14 @@ app.get('/api/app-builder/advanced/projects/:id/code', authenticateToken, (req, 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// SSO/OIDC stubs
+app.get('/api/sso/oidc/config', (_req, res) => {
+  res.json({ enabled: false, issuer: null, clientId: null });
+});
+app.post('/api/sso/oidc/callback', (_req, res) => {
+  res.status(501).json({ error: { code: 'not_implemented', message: 'OIDC callback not implemented' } });
 });
 
 // Serve static files
