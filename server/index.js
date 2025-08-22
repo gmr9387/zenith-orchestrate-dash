@@ -1897,6 +1897,62 @@ app.post('/api/sso/oidc/callback', (_req, res) => {
   res.status(501).json({ error: { code: 'not_implemented', message: 'OIDC callback not implemented' } });
 });
 
+// SCIM v2 stubs (Users/Groups)
+app.get('/scim/v2/ServiceProviderConfig', (_req, res) => {
+  res.json({ schemas: ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"], patch: { supported: true }, bulk: { supported: false }, filter: { supported: true, maxResults: 200 } });
+});
+app.get('/scim/v2/Users', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.json({ Resources: [], startIndex: 1, itemsPerPage: 0, totalResults: 0, schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"] });
+});
+app.post('/scim/v2/Users', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.status(501).json({ detail: 'Not implemented' });
+});
+app.get('/scim/v2/Groups', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.json({ Resources: [], startIndex: 1, itemsPerPage: 0, totalResults: 0, schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"] });
+});
+
+// CRM export/import (admin)
+app.get('/api/crm/export', authenticateToken, requireRole(['admin']), (req, res) => {
+  try {
+    const contacts = db.prepare('SELECT * FROM crm_contacts').all();
+    const deals = db.prepare('SELECT * FROM crm_deals').all();
+    const activities = db.prepare('SELECT * FROM crm_activities').all();
+    res.setHeader('Content-Disposition', 'attachment; filename="crm-export.json"');
+    res.json({ contacts, deals, activities });
+  } catch (e) {
+    res.status(500).json({ error: { code: 'export_failed', message: 'Failed to export CRM' } });
+  }
+});
+app.post('/api/crm/import', authenticateToken, requireRole(['admin']), (req, res) => {
+  const ImportSchema = z.object({
+    contacts: z.array(z.any()).optional(),
+    deals: z.array(z.any()).optional(),
+    activities: z.array(z.any()).optional()
+  });
+  const parsed = ImportSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+  const tx = db.transaction((payload) => {
+    if (Array.isArray(payload.contacts)) {
+      const stmt = db.prepare('INSERT OR IGNORE INTO crm_contacts (id,firstName,lastName,email,phone,company,jobTitle,address,city,state,zipCode,country,tags,notes,source,status,assignedTo,createdBy,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      for (const c of payload.contacts) {
+        stmt.run(c.id || nanoid(), c.firstName||'', c.lastName||'', c.email||null, c.phone||null, c.company||null, c.jobTitle||null, c.address||null, c.city||null, c.state||null, c.zipCode||null, c.country||null, c.tags||null, c.notes||null, c.source||null, c.status||'active', c.assignedTo||null, c.createdBy||req.user.id, c.createdAt||new Date().toISOString(), c.updatedAt||new Date().toISOString());
+      }
+    }
+    if (Array.isArray(parsed.data.deals)) {
+      const stmt = db.prepare('INSERT OR IGNORE INTO crm_deals (id,title,description,amount,currency,stage,probability,expectedCloseDate,contactId,leadId,assignedTo,createdBy,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      for (const d of parsed.data.deals) {
+        stmt.run(d.id || nanoid(), d.title||'Untitled', d.description||null, d.amount||null, d.currency||'USD', d.stage||'prospecting', d.probability||0, d.expectedCloseDate||null, d.contactId||null, d.leadId||null, d.assignedTo||null, d.createdBy||req.user.id, d.createdAt||new Date().toISOString(), d.updatedAt||new Date().toISOString());
+      }
+    }
+  });
+  try {
+    tx(parsed.data);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: { code: 'import_failed', message: 'Failed to import CRM' } });
+  }
+});
+
 // Serve static files
 app.use('/uploads', express.static(storageDir));
 app.use('/thumbnails', express.static(path.join(dataDir, 'thumbnails')));
