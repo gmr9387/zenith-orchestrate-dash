@@ -286,7 +286,7 @@ const videoAnalytics = new VideoAnalytics(db);
 const workflowIntegrations = new WorkflowIntegrations();
 const workflowTemplates = new WorkflowTemplates();
 
-const videoQueue = new VideoQueue(db, { concurrency: 2 });
+const videoQueue = new VideoQueue(db, { concurrency: parseInt(process.env.QUEUE_CONCURRENCY || '2') });
 
 const storageManager = new StorageManager({
   provider: process.env.STORAGE_PROVIDER || 'local',
@@ -520,6 +520,14 @@ const logAudit = (userId, action, resource, resourceId, details, req) => {
 };
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/queue/health', async (_req, res) => {
+  try {
+    const stats = await videoQueue.getQueueStats();
+    res.json({ ok: !stats.error, stats });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
 app.get('/api/ready', async (_req, res) => {
   try {
     db.prepare('SELECT 1').get();
