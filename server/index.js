@@ -11,6 +11,8 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 // pino will be loaded dynamically to avoid test runner resolution issues
+import cookieParser from 'cookie-parser';
+import client from 'prom-client';
 
 
 // Import video processor, API gateway, CRM system, and App Builder
@@ -35,8 +37,21 @@ import AdvancedAppBuilder from './app-builder-advanced.js';
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
+const REFRESH_TOKEN_TTL_MS = parseInt(process.env.REFRESH_TOKEN_TTL_MS || `${7 * 24 * 60 * 60 * 1000}`); // 7 days
+const COOKIE_SECURE = process.env.NODE_ENV === 'production';
+const METRICS_ENABLED = process.env.METRICS_ENABLED !== 'false';
+const metricsRegistry = new client.Registry();
+client.collectDefaultMetrics({ register: metricsRegistry });
+const httpRequestDurationMs = new client.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'HTTP request duration in ms',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [50, 100, 200, 500, 1000, 2000, 5000]
+});
+metricsRegistry.registerMetric(httpRequestDurationMs);
 const app = express();
+app.set('trust proxy', 1);
 
 // Logger (dynamic to play nice with test runners)
 (async () => {
@@ -79,6 +94,8 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
     },
   },
+  referrerPolicy: { policy: 'no-referrer' },
+  crossOriginResourcePolicy: { policy: 'same-site' },
 }));
 
 // Disable x-powered-by
@@ -93,6 +110,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '5mb' }));
+app.use(cookieParser());
 
 // Request ID middleware
 app.use((req, res, next) => {
@@ -118,12 +136,28 @@ app.use((req, res, next) => {
 		};
 		// eslint-disable-next-line no-console
 		console.log(JSON.stringify(log));
+    if (METRICS_ENABLED) {
+      const routeLabel = req.route?.path || req.originalUrl.split('?')[0];
+      httpRequestDurationMs.labels(req.method, routeLabel, String(res.statusCode)).observe(ms);
+    }
 	});
 	next();
 });
 
 // Global rate limit (fallbacks to memory if no Redis)
 app.use(createRateLimiter({ limitPerMinute: parseInt(process.env.RATE_LIMIT_PER_MIN || '600') }));
+
+// Stricter rate limits for write operations
+const writeLimiter = createRateLimiter({
+  limitPerMinute: parseInt(process.env.WRITE_LIMIT_PER_MIN || '300'),
+  keyGenerator: (req) => req.user?.id || req.ip
+});
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE' || req.method === 'PATCH') {
+    return writeLimiter(req, res, next);
+  }
+  return next();
+});
 
 const __dirnameLocal = path.resolve();
 const dataDir = path.join(__dirnameLocal, 'server');
@@ -486,9 +520,23 @@ const logAudit = (userId, action, resource, resourceId, details, req) => {
 };
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/ready', async (_req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'db_unavailable' });
+  }
+});
+app.get('/metrics', async (req, res) => {
+  if (!METRICS_ENABLED) return res.status(404).end();
+  res.setHeader('Content-Type', metricsRegistry.contentType);
+  res.end(await metricsRegistry.metrics());
+});
 
 // Authentication routes
-app.post('/api/auth/register', async (req, res) => {
+const authLimiter = createRateLimiter({ limitPerMinute: 30 });
+app.post('/api/auth/register', authLimiter, async (req, res) => {
 	const parsed = UserCreateSchema.safeParse(req.body);
 	if (!parsed.success) return res.status(400).json({ 
 		error: { 
@@ -527,7 +575,7 @@ app.post('/api/auth/register', async (req, res) => {
 	});
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
 	const parsed = UserLoginSchema.safeParse(req.body);
 	if (!parsed.success) return res.status(400).json({ 
 		error: { 
@@ -561,23 +609,31 @@ app.post('/api/auth/login', async (req, res) => {
 		});
 	}
 
-	// Create session
+	// Create session (refresh token id)
 	const sessionId = nanoid();
 	const tokenHash = await bcrypt.hash(sessionId, 12);
-	const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
 	const now = new Date().toISOString();
 
 	insertSession.run(sessionId, user.id, tokenHash, expiresAt, now);
 	updateUserLastLogin.run(now, now, user.id);
 
-	// Generate JWT
+	// Generate access token
 	const token = jwt.sign({ 
 		userId: user.id, 
 		sessionId,
 		role: user.role 
-	}, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+	}, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
 
 	logAudit(user.id, 'user_login', 'users', user.id, { email }, req);
+
+	res.cookie('rtid', sessionId, {
+		httpOnly: true,
+		secure: COOKIE_SECURE,
+		sameSite: 'lax',
+		path: '/api/auth/refresh',
+		expires: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+	});
 
 	res.json({ 
 		token,
@@ -602,6 +658,7 @@ app.post('/api/auth/logout', authenticateToken, (req, res) => {
 		// Token might be expired, but we still want to clear any existing session
 	}
 
+	res.clearCookie('rtid', { path: '/api/auth/refresh' });
 	res.json({ message: 'Logged out successfully' });
 });
 
@@ -614,6 +671,42 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 			role: req.user.role 
 		}
 	});
+});
+
+// Refresh token rotation endpoint
+app.post('/api/auth/refresh', authLimiter, (req, res) => {
+  const incoming = req.cookies?.rtid;
+  if (!incoming) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Missing refresh token', requestId: req.id } });
+  }
+  const session = db.prepare('SELECT * FROM user_sessions WHERE id = ?').get(incoming);
+  if (!session) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid session', requestId: req.id } });
+  }
+  if (new Date(session.expiresAt).getTime() < Date.now()) {
+    deleteSession.run(session.id);
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Session expired', requestId: req.id } });
+  }
+  // rotate session id
+  const newId = nanoid();
+  const newHash = bcrypt.hashSync(newId, 12);
+  const newExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
+  // delete old and insert new atomically
+  const tx = db.transaction(() => {
+    deleteSession.run(session.id);
+    insertSession.run(newId, session.userId, newHash, newExpires, new Date().toISOString());
+  });
+  tx();
+  const user = getUserById.get(session.userId);
+  const access = jwt.sign({ userId: user.id, sessionId: newId, role: user.role }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
+  res.cookie('rtid', newId, {
+    httpOnly: true,
+    secure: COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/api/auth/refresh',
+    expires: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+  });
+  res.json({ token: access });
 });
 
 // Tutorials (now with authentication)
@@ -713,7 +806,17 @@ app.post('/api/tutorials/:id/steps', authenticateToken, (req, res) => {
 	res.json({ ok: true, stepCount: count });
 });
 
-const upload = multer({ dest: storageDir, limits: { fileSize: 100 * 1024 * 1024 } });
+const allowedMimePrefixes = ['image/', 'video/'];
+const allowedExact = new Set(['application/pdf']);
+const upload = multer({ 
+  dest: storageDir, 
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = allowedMimePrefixes.some(p => file.mimetype?.startsWith(p)) || allowedExact.has(file.mimetype || '');
+    if (!ok) return cb(new Error('Unsupported file type'));
+    cb(null, true);
+  }
+});
 app.post('/api/tutorials/:id/media', authenticateToken, upload.single('file'), (req, res) => {
 	const t = getTutorial.get(req.params.id);
 	if (!t) return res.status(404).json({ 
@@ -1744,10 +1847,21 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-	app.listen(PORT, () => {
+	const server = app.listen(PORT, () => {
 		// eslint-disable-next-line no-console
 		console.log(`API listening on http://localhost:${PORT}`);
 	});
+	const shutdown = () => {
+		// eslint-disable-next-line no-console
+		console.log('Shutting down gracefully...');
+		server.close(() => {
+			try { db.close(); } catch {}
+			process.exit(0);
+		});
+		setTimeout(() => process.exit(1), 10000).unref();
+	};
+	process.on('SIGTERM', shutdown);
+	process.on('SIGINT', shutdown);
 }
 
 export default app;
