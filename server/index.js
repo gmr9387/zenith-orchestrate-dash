@@ -529,12 +529,27 @@ app.get('/api/queue/health', async (_req, res) => {
   }
 });
 app.get('/api/ready', async (_req, res) => {
+  const result = { ok: true, sqlite: false, postgres: false };
   try {
     db.prepare('SELECT 1').get();
-    res.json({ ok: true });
+    result.sqlite = true;
   } catch (e) {
-    res.status(500).json({ ok: false, error: 'db_unavailable' });
+    result.ok = false;
   }
+  if (process.env.DATABASE_URL) {
+    try {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: process.env.DATABASE_URL });
+      await client.connect();
+      await client.query('SELECT 1');
+      await client.end();
+      result.postgres = true;
+    } catch (_e) {
+      result.ok = false;
+    }
+  }
+  if (result.ok) return res.json(result);
+  return res.status(500).json(result);
 });
 app.get('/metrics', async (req, res) => {
   if (!METRICS_ENABLED) return res.status(404).end();
