@@ -451,3 +451,35 @@ iostat -x 1
 ---
 
 **This deployment guide ensures your Zilliance platform runs with the same reliability and security as enterprise-grade SaaS platforms. Every configuration is battle-tested and production-ready.**
+
+# Production Deployment Notes
+
+## S3/MinIO CORS & CDN
+
+- Configure CORS on the bucket (example JSON):
+```
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET","PUT","POST","HEAD"],
+    "AllowedOrigins": ["https://your-domain.com"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+- Set environment:
+  - STORAGE_PROVIDER=s3
+  - STORAGE_ENDPOINT=https://s3.your-cloud.com
+  - STORAGE_REGION=us-east-1
+  - STORAGE_BUCKET=your-bucket
+  - STORAGE_ACCESS_KEY_ID=...
+  - STORAGE_SECRET_ACCESS_KEY=...
+  - CDN_BASE_URL=https://cdn.your-domain.com
+  - DEFAULT_TTL=3600
+- Enable object lifecycle policies for video variants and thumbnails to reduce storage costs (e.g., transition to IA after 30 days, expire after 180 days).
+
+## Backups & Runbooks
+- Postgres: nightly dumps (pg_dump) and PITR if available; verify restore quarterly.
+- Redis: ephemeral; persist only if required; use AOF for critical queues.
+- App storage: version infrastructure as code; regularly test disaster recovery.

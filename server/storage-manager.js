@@ -12,6 +12,8 @@ class StorageManager {
       bucket: config.bucket,
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
+      cdnBaseUrl: config.cdnBaseUrl, // optional CDN URL
+      defaultTtl: typeof config.defaultTtl === 'number' ? config.defaultTtl : 3600,
       ...config
     };
 
@@ -70,13 +72,15 @@ class StorageManager {
         Body: fileContent,
         ContentType: options.contentType || this.getContentType(filePath),
         Metadata: options.metadata || {},
+        CacheControl: options.cacheControl || 'public, max-age=31536000, immutable',
         ...options
       });
 
       await this.client.send(command);
       
+      const originUrl = `${this.config.endpoint}/${this.config.bucket}/${key}`;
       return {
-        url: `${this.config.endpoint}/${this.config.bucket}/${key}`,
+        url: this.config.cdnBaseUrl ? `${this.config.cdnBaseUrl}/${key}` : originUrl,
         key: key,
         size: fileContent.length
       };
@@ -106,7 +110,7 @@ class StorageManager {
   }
 
   // Generate signed URL for file access
-  async getSignedUrl(key, operation = 'getObject', expiresIn = 3600) {
+  async getSignedUrl(key, operation = 'getObject', expiresIn) {
     if (this.config.provider === 'local') {
       return `/storage/${key}`;
     }
@@ -117,7 +121,13 @@ class StorageManager {
         Key: key
       });
 
-      return await this.getSignedUrl(this.client, command, { expiresIn });
+      const url = await this.getSignedUrl(this.client, command, { expiresIn: expiresIn || this.config.defaultTtl });
+      if (this.config.cdnBaseUrl && operation === 'getObject') {
+        // Rewrite to CDN base; note: CDN must honor origin auth if needed.
+        const originPath = `/${this.config.bucket}/`;
+        return url.replace(this.config.endpoint + originPath, this.config.cdnBaseUrl + '/');
+      }
+      return url;
     } catch (error) {
       console.error('Failed to generate signed URL:', error);
       throw new Error(`Failed to generate signed URL: ${error.message}`);

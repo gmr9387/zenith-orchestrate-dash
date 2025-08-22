@@ -805,6 +805,10 @@ class AppBuilder {
 
     // Publish project
     this.router.post('/projects/:id/publish', this.authenticateUser, (req, res) => {
+      const plan = req.user?.plan || 'pro';
+      if (plan === 'free') {
+        return res.status(403).json({ error: { code: 'entitlement_required', message: 'Publish requires Pro plan' } });
+      }
       const project = this.getProject.get(req.params.id);
       if (!project) {
         return res.status(404).json({

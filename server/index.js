@@ -11,6 +11,8 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 // pino will be loaded dynamically to avoid test runner resolution issues
+import cookieParser from 'cookie-parser';
+import client from 'prom-client';
 
 
 // Import video processor, API gateway, CRM system, and App Builder
@@ -35,8 +37,21 @@ import AdvancedAppBuilder from './app-builder-advanced.js';
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
+const REFRESH_TOKEN_TTL_MS = parseInt(process.env.REFRESH_TOKEN_TTL_MS || `${7 * 24 * 60 * 60 * 1000}`); // 7 days
+const COOKIE_SECURE = process.env.NODE_ENV === 'production';
+const METRICS_ENABLED = process.env.METRICS_ENABLED !== 'false';
+const metricsRegistry = new client.Registry();
+client.collectDefaultMetrics({ register: metricsRegistry });
+const httpRequestDurationMs = new client.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'HTTP request duration in ms',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [50, 100, 200, 500, 1000, 2000, 5000]
+});
+metricsRegistry.registerMetric(httpRequestDurationMs);
 const app = express();
+app.set('trust proxy', 1);
 
 // Logger (dynamic to play nice with test runners)
 (async () => {
@@ -79,6 +94,8 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
     },
   },
+  referrerPolicy: { policy: 'no-referrer' },
+  crossOriginResourcePolicy: { policy: 'same-site' },
 }));
 
 // Disable x-powered-by
@@ -93,6 +110,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '5mb' }));
+app.use(cookieParser());
 
 // Request ID middleware
 app.use((req, res, next) => {
@@ -118,12 +136,28 @@ app.use((req, res, next) => {
 		};
 		// eslint-disable-next-line no-console
 		console.log(JSON.stringify(log));
+    if (METRICS_ENABLED) {
+      const routeLabel = req.route?.path || req.originalUrl.split('?')[0];
+      httpRequestDurationMs.labels(req.method, routeLabel, String(res.statusCode)).observe(ms);
+    }
 	});
 	next();
 });
 
 // Global rate limit (fallbacks to memory if no Redis)
 app.use(createRateLimiter({ limitPerMinute: parseInt(process.env.RATE_LIMIT_PER_MIN || '600') }));
+
+// Stricter rate limits for write operations
+const writeLimiter = createRateLimiter({
+  limitPerMinute: parseInt(process.env.WRITE_LIMIT_PER_MIN || '300'),
+  keyGenerator: (req) => req.user?.id || req.ip
+});
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE' || req.method === 'PATCH') {
+    return writeLimiter(req, res, next);
+  }
+  return next();
+});
 
 const __dirnameLocal = path.resolve();
 const dataDir = path.join(__dirnameLocal, 'server');
@@ -252,7 +286,7 @@ const videoAnalytics = new VideoAnalytics(db);
 const workflowIntegrations = new WorkflowIntegrations();
 const workflowTemplates = new WorkflowTemplates();
 
-const videoQueue = new VideoQueue(db, { concurrency: 2 });
+const videoQueue = new VideoQueue(db, { concurrency: parseInt(process.env.QUEUE_CONCURRENCY || '2') });
 
 const storageManager = new StorageManager({
   provider: process.env.STORAGE_PROVIDER || 'local',
@@ -465,6 +499,22 @@ const requireRole = (roles) => {
 	};
 };
 
+// Entitlements (plan-aware flags)
+const entitlements = {
+  free: { crmAdvanced: false, appBuilderPublish: true },
+  pro: { crmAdvanced: true, appBuilderPublish: true },
+  enterprise: { crmAdvanced: true, appBuilderPublish: true }
+};
+function requireEntitlement(flag) {
+  return (req, res, next) => {
+    const plan = req.user?.plan || 'pro';
+    if (!entitlements[plan]?.[flag]) {
+      return res.status(403).json({ error: { code: 'entitlement_required', message: `Feature requires ${flag}` } });
+    }
+    next();
+  };
+}
+
 // Audit logging helper
 const logAudit = (userId, action, resource, resourceId, details, req) => {
 	try {
@@ -486,9 +536,71 @@ const logAudit = (userId, action, resource, resourceId, details, req) => {
 };
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/queue/health', async (_req, res) => {
+  try {
+    const stats = await videoQueue.getQueueStats();
+    res.json({ ok: !stats.error, stats });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+app.get('/api/ready', async (_req, res) => {
+  const result = { ok: true, sqlite: false, postgres: false };
+  try {
+    db.prepare('SELECT 1').get();
+    result.sqlite = true;
+  } catch (e) {
+    result.ok = false;
+  }
+  if (process.env.DATABASE_URL) {
+    try {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: process.env.DATABASE_URL });
+      await client.connect();
+      await client.query('SELECT 1');
+      await client.end();
+      result.postgres = true;
+    } catch (_e) {
+      result.ok = false;
+    }
+  }
+  if (result.ok) return res.json(result);
+  return res.status(500).json(result);
+});
+app.get('/metrics', async (req, res) => {
+  if (!METRICS_ENABLED) return res.status(404).end();
+  res.setHeader('Content-Type', metricsRegistry.contentType);
+  res.end(await metricsRegistry.metrics());
+});
+
+// OpenAPI docs (minimal)
+app.get('/api/openapi.json', (_req, res) => {
+  const spec = {
+    openapi: '3.0.0',
+    info: { title: 'Zilliance API', version: '1.0.0' },
+    paths: {
+      '/api/health': { get: { summary: 'Health', responses: { '200': { description: 'OK' } } } },
+      '/api/auth/login': { post: { summary: 'Login', responses: { '200': { description: 'Token' } } } },
+      '/api/crm/contacts': { get: { summary: 'List contacts', responses: { '200': { description: 'OK' } } } },
+      '/api/app-builder/projects': { post: { summary: 'Create project', responses: { '201': { description: 'Created' } } } }
+    }
+  };
+  res.json(spec);
+});
+app.get('/api/docs', async (_req, res) => {
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"/></head>
+  <body><div id="swagger"></div>
+  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script>window.ui = SwaggerUIBundle({ url: '/api/openapi.json', dom_id: '#swagger' });</script>
+  </body></html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
 
 // Authentication routes
-app.post('/api/auth/register', async (req, res) => {
+const authLimiter = createRateLimiter({ limitPerMinute: 30 });
+app.post('/api/auth/register', authLimiter, async (req, res) => {
 	const parsed = UserCreateSchema.safeParse(req.body);
 	if (!parsed.success) return res.status(400).json({ 
 		error: { 
@@ -527,7 +639,7 @@ app.post('/api/auth/register', async (req, res) => {
 	});
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
 	const parsed = UserLoginSchema.safeParse(req.body);
 	if (!parsed.success) return res.status(400).json({ 
 		error: { 
@@ -561,23 +673,31 @@ app.post('/api/auth/login', async (req, res) => {
 		});
 	}
 
-	// Create session
+	// Create session (refresh token id)
 	const sessionId = nanoid();
 	const tokenHash = await bcrypt.hash(sessionId, 12);
-	const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
 	const now = new Date().toISOString();
 
 	insertSession.run(sessionId, user.id, tokenHash, expiresAt, now);
 	updateUserLastLogin.run(now, now, user.id);
 
-	// Generate JWT
+	// Generate access token
 	const token = jwt.sign({ 
 		userId: user.id, 
 		sessionId,
 		role: user.role 
-	}, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+	}, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
 
 	logAudit(user.id, 'user_login', 'users', user.id, { email }, req);
+
+	res.cookie('rtid', sessionId, {
+		httpOnly: true,
+		secure: COOKIE_SECURE,
+		sameSite: 'lax',
+		path: '/api/auth/refresh',
+		expires: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+	});
 
 	res.json({ 
 		token,
@@ -602,6 +722,7 @@ app.post('/api/auth/logout', authenticateToken, (req, res) => {
 		// Token might be expired, but we still want to clear any existing session
 	}
 
+	res.clearCookie('rtid', { path: '/api/auth/refresh' });
 	res.json({ message: 'Logged out successfully' });
 });
 
@@ -614,6 +735,42 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 			role: req.user.role 
 		}
 	});
+});
+
+// Refresh token rotation endpoint
+app.post('/api/auth/refresh', authLimiter, (req, res) => {
+  const incoming = req.cookies?.rtid;
+  if (!incoming) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Missing refresh token', requestId: req.id } });
+  }
+  const session = db.prepare('SELECT * FROM user_sessions WHERE id = ?').get(incoming);
+  if (!session) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid session', requestId: req.id } });
+  }
+  if (new Date(session.expiresAt).getTime() < Date.now()) {
+    deleteSession.run(session.id);
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Session expired', requestId: req.id } });
+  }
+  // rotate session id
+  const newId = nanoid();
+  const newHash = bcrypt.hashSync(newId, 12);
+  const newExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
+  // delete old and insert new atomically
+  const tx = db.transaction(() => {
+    deleteSession.run(session.id);
+    insertSession.run(newId, session.userId, newHash, newExpires, new Date().toISOString());
+  });
+  tx();
+  const user = getUserById.get(session.userId);
+  const access = jwt.sign({ userId: user.id, sessionId: newId, role: user.role }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
+  res.cookie('rtid', newId, {
+    httpOnly: true,
+    secure: COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/api/auth/refresh',
+    expires: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+  });
+  res.json({ token: access });
 });
 
 // Tutorials (now with authentication)
@@ -640,6 +797,12 @@ app.post('/api/tutorials', authenticateToken, (req, res) => {
 
 app.get('/api/tutorials', authenticateToken, (req, res) => {
 	const rows = req.user.role === 'admin' ? listTutorials.all() : listTutorialsByUser.all(req.user.id);
+	const etag = 'W/"' + rows.length + '-' + (rows[0]?.updatedAt || 0) + '"';
+	if (req.headers['if-none-match'] === etag) {
+		return res.status(304).end();
+	}
+	res.setHeader('ETag', etag);
+	res.setHeader('Cache-Control', 'private, max-age=30');
 	res.json(rows);
 });
 
@@ -665,6 +828,12 @@ app.get('/api/tutorials/:id', authenticateToken, (req, res) => {
 	}
 	
 	const steps = listSteps.all(req.params.id);
+	const etag = 'W/"' + t.updatedAt + '-' + steps.length + '"';
+	if (req.headers['if-none-match'] === etag) {
+		return res.status(304).end();
+	}
+	res.setHeader('ETag', etag);
+	res.setHeader('Cache-Control', 'private, max-age=60');
 	res.json({ ...t, steps });
 });
 
@@ -713,7 +882,17 @@ app.post('/api/tutorials/:id/steps', authenticateToken, (req, res) => {
 	res.json({ ok: true, stepCount: count });
 });
 
-const upload = multer({ dest: storageDir, limits: { fileSize: 100 * 1024 * 1024 } });
+const allowedMimePrefixes = ['image/', 'video/'];
+const allowedExact = new Set(['application/pdf']);
+const upload = multer({ 
+  dest: storageDir, 
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = allowedMimePrefixes.some(p => file.mimetype?.startsWith(p)) || allowedExact.has(file.mimetype || '');
+    if (!ok) return cb(new Error('Unsupported file type'));
+    cb(null, true);
+  }
+});
 app.post('/api/tutorials/:id/media', authenticateToken, upload.single('file'), (req, res) => {
 	const t = getTutorial.get(req.params.id);
 	if (!t) return res.status(404).json({ 
@@ -1446,10 +1625,10 @@ app.post('/api/videos/:id/signed-url', authenticateToken, async (req, res) => {
 app.use('/api/gateway', apiGateway.getRouter());
 
 // CRM routes
-app.use('/api/crm', crmSystem.getRouter());
+app.use('/api/crm', authenticateToken, crmSystem.getRouter());
 
 // App Builder routes
-app.use('/api/app-builder', appBuilder.getRouter());
+app.use('/api/app-builder', authenticateToken, appBuilder.getRouter());
 
 // Advanced Video Platform routes
 app.post('/api/videos/:id/ai/captions', authenticateToken, async (req, res) => {
@@ -1577,12 +1756,12 @@ app.post('/api/workflows/templates/:id/create', authenticateToken, (req, res) =>
 });
 
 // Advanced CRM routes
-app.get('/api/crm/advanced/dashboard', authenticateToken, (req, res) => {
+app.get('/api/crm/advanced/dashboard', authenticateToken, requireRole(['admin','enterprise']), requireEntitlement('crmAdvanced'), (req, res) => {
   try {
     const stats = advancedCRM.getDashboardStats();
     res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get dashboard' });
   }
 });
 
@@ -1710,6 +1889,70 @@ app.get('/api/app-builder/advanced/projects/:id/code', authenticateToken, (req, 
   }
 });
 
+// SSO/OIDC stubs
+app.get('/api/sso/oidc/config', (_req, res) => {
+  res.json({ enabled: false, issuer: null, clientId: null });
+});
+app.post('/api/sso/oidc/callback', (_req, res) => {
+  res.status(501).json({ error: { code: 'not_implemented', message: 'OIDC callback not implemented' } });
+});
+
+// SCIM v2 stubs (Users/Groups)
+app.get('/scim/v2/ServiceProviderConfig', (_req, res) => {
+  res.json({ schemas: ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"], patch: { supported: true }, bulk: { supported: false }, filter: { supported: true, maxResults: 200 } });
+});
+app.get('/scim/v2/Users', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.json({ Resources: [], startIndex: 1, itemsPerPage: 0, totalResults: 0, schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"] });
+});
+app.post('/scim/v2/Users', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.status(501).json({ detail: 'Not implemented' });
+});
+app.get('/scim/v2/Groups', authenticateToken, requireRole(['admin','enterprise']), (_req, res) => {
+  res.json({ Resources: [], startIndex: 1, itemsPerPage: 0, totalResults: 0, schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"] });
+});
+
+// CRM export/import (admin)
+app.get('/api/crm/export', authenticateToken, requireRole(['admin']), (req, res) => {
+  try {
+    const contacts = db.prepare('SELECT * FROM crm_contacts').all();
+    const deals = db.prepare('SELECT * FROM crm_deals').all();
+    const activities = db.prepare('SELECT * FROM crm_activities').all();
+    res.setHeader('Content-Disposition', 'attachment; filename="crm-export.json"');
+    res.json({ contacts, deals, activities });
+  } catch (e) {
+    res.status(500).json({ error: { code: 'export_failed', message: 'Failed to export CRM' } });
+  }
+});
+app.post('/api/crm/import', authenticateToken, requireRole(['admin']), (req, res) => {
+  const ImportSchema = z.object({
+    contacts: z.array(z.any()).optional(),
+    deals: z.array(z.any()).optional(),
+    activities: z.array(z.any()).optional()
+  });
+  const parsed = ImportSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: { code: 'invalid_request', message: parsed.error.message } });
+  const tx = db.transaction((payload) => {
+    if (Array.isArray(payload.contacts)) {
+      const stmt = db.prepare('INSERT OR IGNORE INTO crm_contacts (id,firstName,lastName,email,phone,company,jobTitle,address,city,state,zipCode,country,tags,notes,source,status,assignedTo,createdBy,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      for (const c of payload.contacts) {
+        stmt.run(c.id || nanoid(), c.firstName||'', c.lastName||'', c.email||null, c.phone||null, c.company||null, c.jobTitle||null, c.address||null, c.city||null, c.state||null, c.zipCode||null, c.country||null, c.tags||null, c.notes||null, c.source||null, c.status||'active', c.assignedTo||null, c.createdBy||req.user.id, c.createdAt||new Date().toISOString(), c.updatedAt||new Date().toISOString());
+      }
+    }
+    if (Array.isArray(parsed.data.deals)) {
+      const stmt = db.prepare('INSERT OR IGNORE INTO crm_deals (id,title,description,amount,currency,stage,probability,expectedCloseDate,contactId,leadId,assignedTo,createdBy,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      for (const d of parsed.data.deals) {
+        stmt.run(d.id || nanoid(), d.title||'Untitled', d.description||null, d.amount||null, d.currency||'USD', d.stage||'prospecting', d.probability||0, d.expectedCloseDate||null, d.contactId||null, d.leadId||null, d.assignedTo||null, d.createdBy||req.user.id, d.createdAt||new Date().toISOString(), d.updatedAt||new Date().toISOString());
+      }
+    }
+  });
+  try {
+    tx(parsed.data);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: { code: 'import_failed', message: 'Failed to import CRM' } });
+  }
+});
+
 // Serve static files
 app.use('/uploads', express.static(storageDir));
 app.use('/thumbnails', express.static(path.join(dataDir, 'thumbnails')));
@@ -1744,10 +1987,21 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-	app.listen(PORT, () => {
+	const server = app.listen(PORT, () => {
 		// eslint-disable-next-line no-console
 		console.log(`API listening on http://localhost:${PORT}`);
 	});
+	const shutdown = () => {
+		// eslint-disable-next-line no-console
+		console.log('Shutting down gracefully...');
+		server.close(() => {
+			try { db.close(); } catch {}
+			process.exit(0);
+		});
+		setTimeout(() => process.exit(1), 10000).unref();
+	};
+	process.on('SIGTERM', shutdown);
+	process.on('SIGINT', shutdown);
 }
 
 export default app;

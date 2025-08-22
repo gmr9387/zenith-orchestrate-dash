@@ -197,4 +197,44 @@ describe('API server', () => {
       .send({ title: 'Test Tutorial' });
     expect(tutorialRes.status).toBe(200);
   });
+
+  it('CRM contacts CRUD works', async () => {
+    const create = await request(app)
+      .post('/api/crm/contacts')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ firstName: 'Ada', lastName: 'Lovelace', email: `ada-${Date.now()}@example.com` });
+    expect([200, 201]).toContain(create.status);
+    const id = create.body.id;
+
+    const get = await request(app)
+      .get(`/api/crm/contacts/${id}`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(get.status).toBe(200);
+
+    const list = await request(app)
+      .get('/api/crm/contacts')
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(list.status).toBe(200);
+    expect(Array.isArray(list.body)).toBe(true);
+
+    const update = await request(app)
+      .put(`/api/crm/contacts/${id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ phone: '123-456-7890' });
+    expect(update.status).toBe(200);
+  });
+
+  it('App Builder project create and build returns ok', async () => {
+    const create = await request(app)
+      .post('/api/app-builder/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ name: `Proj-${Date.now()}`, description: 'desc', template: 'blank' });
+    expect([200, 201]).toContain(create.status);
+
+    const build = await request(app)
+      .post(`/api/app-builder/projects/${create.body.id}/build`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({});
+    expect([200, 202]).toContain(build.status);
+  });
 });

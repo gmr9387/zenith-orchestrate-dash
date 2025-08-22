@@ -88,63 +88,25 @@ class CRMSystem {
       
       CREATE TABLE IF NOT EXISTS crm_activities (
         id TEXT PRIMARY KEY,
-        type TEXT NOT NULL, -- call, email, meeting, note, task
-        subject TEXT NOT NULL,
+        type TEXT NOT NULL, -- call, meeting, email, note, task
+        subject TEXT,
         description TEXT,
-        contactId TEXT,
-        leadId TEXT,
-        dealId TEXT,
-        assignedTo TEXT,
-        dueDate TEXT,
-        completedAt TEXT,
         status TEXT DEFAULT 'pending', -- pending, completed, cancelled
+        dueDate TEXT,
+        dealId TEXT,
+        contactId TEXT,
         createdBy TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
-        FOREIGN KEY (contactId) REFERENCES crm_contacts(id) ON DELETE CASCADE,
-        FOREIGN KEY (leadId) REFERENCES crm_leads(id) ON DELETE CASCADE,
-        FOREIGN KEY (dealId) REFERENCES crm_deals(id) ON DELETE CASCADE,
-        FOREIGN KEY (assignedTo) REFERENCES users(id) ON DELETE SET NULL,
-        FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE
-      );
-      
-      CREATE TABLE IF NOT EXISTS crm_emails (
-        id TEXT PRIMARY KEY,
-        subject TEXT NOT NULL,
-        body TEXT NOT NULL,
-        fromEmail TEXT NOT NULL,
-        toEmail TEXT NOT NULL,
-        contactId TEXT,
-        leadId TEXT,
-        dealId TEXT,
-        status TEXT DEFAULT 'draft', -- draft, sent, delivered, opened, bounced
-        sentAt TEXT,
-        openedAt TEXT,
-        createdBy TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (contactId) REFERENCES crm_contacts(id) ON DELETE SET NULL,
-        FOREIGN KEY (leadId) REFERENCES crm_leads(id) ON DELETE SET NULL,
+        deletedAt TEXT,
         FOREIGN KEY (dealId) REFERENCES crm_deals(id) ON DELETE SET NULL,
+        FOREIGN KEY (contactId) REFERENCES crm_contacts(id) ON DELETE SET NULL,
         FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE
       );
       
-      -- Indexes for performance
-      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
-      CREATE INDEX IF NOT EXISTS idx_crm_contacts_company ON crm_contacts(company);
-      CREATE INDEX IF NOT EXISTS idx_crm_contacts_assigned_to ON crm_contacts(assignedTo);
-      CREATE INDEX IF NOT EXISTS idx_crm_contacts_status ON crm_contacts(status);
-      
-      CREATE INDEX IF NOT EXISTS idx_crm_leads_email ON crm_leads(email);
-      CREATE INDEX IF NOT EXISTS idx_crm_leads_status ON crm_leads(status);
-      CREATE INDEX IF NOT EXISTS idx_crm_leads_assigned_to ON crm_leads(assignedTo);
-      
-      CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crm_deals(stage);
-      CREATE INDEX IF NOT EXISTS idx_crm_deals_assigned_to ON crm_deals(assignedTo);
-      CREATE INDEX IF NOT EXISTS idx_crm_deals_contact_id ON crm_deals(contactId);
-      
-      CREATE INDEX IF NOT EXISTS idx_crm_activities_type ON crm_activities(type);
-      CREATE INDEX IF NOT EXISTS idx_crm_activities_status ON crm_activities(status);
-      CREATE INDEX IF NOT EXISTS idx_crm_activities_due_date ON crm_activities(dueDate);
+      CREATE INDEX IF NOT EXISTS idx_contacts_created_by ON crm_contacts(createdBy);
+      CREATE INDEX IF NOT EXISTS idx_deals_stage ON crm_deals(stage);
+      CREATE INDEX IF NOT EXISTS idx_activities_status ON crm_activities(status);
     `);
 
     // Prepared statements
@@ -195,6 +157,15 @@ class CRMSystem {
       UPDATE crm_activities SET type = ?, subject = ?, description = ?, contactId = ?, leadId = ?, dealId = ?, assignedTo = ?, dueDate = ?, completedAt = ?, status = ?, updatedAt = ?
       WHERE id = ?
     `);
+  }
+
+  sanitizeContact(contact, user) {
+    if (!user || (user.role !== 'admin' && user.role !== 'enterprise')) {
+      const maskedEmail = contact.email ? contact.email.replace(/(^.).*(@.*$)/, '$1***$2') : null;
+      const maskedPhone = contact.phone ? contact.phone.replace(/.(?=.{2})/g, '*') : null;
+      return { ...contact, email: maskedEmail, phone: maskedPhone };
+    }
+    return contact;
   }
 
   setupRoutes() {
@@ -272,31 +243,22 @@ class CRMSystem {
     });
 
     this.router.get('/contacts', this.authenticateUser, (req, res) => {
-      const contacts = this.listContacts.all();
-      const processed = contacts.map(contact => ({
-        ...contact,
-        tags: contact.tags ? JSON.parse(contact.tags) : []
-      }));
-      res.json(processed);
+      const list = this.db.prepare('SELECT * FROM crm_contacts WHERE deletedAt IS NULL AND (createdBy = ? OR ? = 1) ORDER BY createdAt DESC');
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'enterprise' ? 1 : 0;
+      const contacts = list.all(req.user.id, isAdmin).map(c => this.sanitizeContact(c, req.user));
+      res.json(contacts);
     });
 
     this.router.get('/contacts/:id', this.authenticateUser, (req, res) => {
-      const contact = this.getContact.get(req.params.id);
+      const get = this.db.prepare('SELECT * FROM crm_contacts WHERE id = ?');
+      const contact = get.get(req.params.id);
       if (!contact) {
-        return res.status(404).json({
-          error: {
-            code: 'not_found',
-            message: 'Contact not found'
-          }
-        });
+        return res.status(404).json({ error: { code: 'not_found', message: 'Contact not found' } });
       }
-
-      const processed = {
-        ...contact,
-        tags: contact.tags ? JSON.parse(contact.tags) : []
-      };
-
-      res.json(processed);
+      if (req.user.role !== 'admin' && contact.createdBy !== req.user.id) {
+        return res.status(403).json({ error: { code: 'forbidden', message: 'Access denied' } });
+      }
+      res.json(this.sanitizeContact(contact, req.user));
     });
 
     this.router.put('/contacts/:id', this.authenticateUser, (req, res) => {
@@ -329,7 +291,13 @@ class CRMSystem {
         });
       }
 
-      const contactData = parsed.data;
+      // Load existing contact and merge
+      const existing = this.getContact.get(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: { code: 'not_found', message: 'Contact not found' } });
+      }
+
+      const contactData = { ...existing, ...parsed.data };
       const now = new Date().toISOString();
 
       try {
@@ -345,10 +313,10 @@ class CRMSystem {
           contactData.state || null,
           contactData.zipCode || null,
           contactData.country || null,
-          contactData.tags ? JSON.stringify(contactData.tags) : null,
+          contactData.tags ? JSON.stringify(contactData.tags) : existing.tags,
           contactData.notes || null,
           contactData.source || null,
-          contactData.status || 'active',
+          contactData.status || existing.status || 'active',
           contactData.assignedTo || null,
           now,
           req.params.id

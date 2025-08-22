@@ -1,0 +1,59 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zilliance
+      POSTGRES_PASSWORD: zilliance
+      POSTGRES_DB: zilliance
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api_blue:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      ALLOWED_ORIGIN: http://proxy
+      JWT_SECRET: change-me
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://zilliance:zilliance@postgres:5432/zilliance
+    depends_on: [redis, postgres]
+
+  api_green:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      ALLOWED_ORIGIN: http://proxy
+      JWT_SECRET: change-me
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://zilliance:zilliance@postgres:5432/zilliance
+    depends_on: [redis, postgres]
+
+  web_blue:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+
+  web_green:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+
+  proxy:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx.bluegreen.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on: [web_blue, web_green, api_blue, api_green]
+
+volumes:
+  pgdata:
