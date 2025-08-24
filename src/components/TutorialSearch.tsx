@@ -153,6 +153,8 @@ export const TutorialSearch = ({ onTutorialSelect, className = '' }: TutorialSea
           <img
             src={tutorial.thumbnailUrl}
             alt={tutorial.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover rounded-md group-hover:scale-105 transition-transform duration-200"
           />
         ) : (

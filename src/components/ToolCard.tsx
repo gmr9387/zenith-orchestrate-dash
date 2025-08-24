@@ -3,10 +3,23 @@ import { ExternalLink, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
+interface PictureSource {
+  type?: string;
+  srcset: string;
+}
+
+interface PictureImg {
+  src: string;
+  w?: number;
+  h?: number;
+}
+
 interface ToolCardProps {
   title: string;
   description: string;
-  image: string;
+  image?: string;
+  pictureSources?: PictureSource[];
+  pictureImg?: PictureImg;
   icon: ReactNode;
   metrics?: Array<{ label: string; value: string; color?: string }>;
   actions?: Array<{ label: string; icon: ReactNode; variant?: "default" | "secondary" | "outline"; onClick?: () => void }>;
@@ -20,6 +33,8 @@ export function ToolCard({
   title, 
   description, 
   image, 
+  pictureSources,
+  pictureImg,
   icon, 
   metrics = [], 
   actions = [],
@@ -51,11 +66,32 @@ export function ToolCard({
 
       {/* Preview Image/Content */}
       <div className="relative mb-4 overflow-hidden rounded-xl">
-        <img 
-          src={image} 
-          alt={title}
-          className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+        {pictureSources && pictureImg ? (
+          <picture>
+            {pictureSources.map((s, i) => (
+              <source key={i} type={s.type} srcSet={s.srcset} />
+            ))}
+            <img
+              src={pictureImg.src}
+              alt={title}
+              loading="lazy"
+              decoding="async"
+              width={pictureImg.w}
+              height={pictureImg.h}
+              className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          </picture>
+        ) : (
+          image && (
+            <img 
+              src={image} 
+              alt={title}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          )
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <div className="absolute bottom-4 left-4 right-4">
             <Button
@@ -113,7 +149,16 @@ export function ToolCard({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="rounded-lg overflow-hidden">
-            <img src={image} alt={`${title} preview`} className="w-full h-auto" />
+            {pictureSources && pictureImg ? (
+              <picture>
+                {pictureSources.map((s, i) => (
+                  <source key={i} type={s.type} srcSet={s.srcset} />
+                ))}
+                <img src={pictureImg.src} alt={`${title} preview`} loading="lazy" decoding="async" className="w-full h-auto" />
+              </picture>
+            ) : (
+              image && <img src={image} alt={`${title} preview`} loading="lazy" decoding="async" className="w-full h-auto" />
+            )}
           </div>
         </DialogContent>
       </Dialog>

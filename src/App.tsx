@@ -1,28 +1,35 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, useEffect, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+// Lazily load devtools only in development and exclude from prod bundles
+const ReactQueryDevtoolsLazy = import.meta.env.DEV
+  ? lazy(() => import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })))
+  : (null as unknown as React.FC<{ initialIsOpen?: boolean }>);
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/toaster";
+// Use a single toast system (Sonner)
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { authManager } from './lib/auth';
-import Index from './pages/Index';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import TutorialBuilder from './pages/TutorialBuilder';
-import UserProfile from './pages/UserProfile';
-import DashboardLayout from './components/DashboardLayout';
-import HeroSection from './components/HeroSection';
-import EnhancedNavigation from './components/EnhancedNavigation';
-import NotFound from './pages/NotFound';
-import TutorialRecord from './pages/TutorialRecord';
-import Tutorials from './pages/Tutorials';
-import TutorialAuto from './pages/TutorialAuto';
-import TutorialView from './pages/TutorialView';
-import VerifyEmail from './pages/VerifyEmail';
-import Reports from './pages/Reports';
+
+// Route-level code splitting
+const Index = lazy(() => import('./pages/Index'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const TutorialBuilder = lazy(() => import('./pages/TutorialBuilder'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const DashboardLayout = lazy(() => import('./components/DashboardLayout'));
+const HeroSection = lazy(() => import('./components/HeroSection'));
+const EnhancedNavigation = lazy(() => import('./components/EnhancedNavigation'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const TutorialRecord = lazy(() => import('./pages/TutorialRecord'));
+const Tutorials = lazy(() => import('./pages/Tutorials'));
+const TutorialAuto = lazy(() => import('./pages/TutorialAuto'));
+const TutorialView = lazy(() => import('./pages/TutorialView'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const Reports = lazy(() => import('./pages/Reports'));
+const AppBuilder = lazy(() => import('./pages/AppBuilder'));
+const CRM = lazy(() => import('./pages/CRM'));
 import './styles/animations.css';
 
 // Create a client
@@ -171,7 +178,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <BrowserRouter>
-          <Routes>
+          <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+            <Routes>
             {/* Landing Page Route */}
             <Route path="/landing" element={<LandingPage />} />
 
@@ -214,6 +222,13 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <TutorialBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/app-builder" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AppBuilder />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
@@ -261,17 +276,40 @@ function App() {
               </ProtectedRoute>
             } />
 
+            <Route path="/crm" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CRM />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
-        <Toaster />
         <Sonner />
       </TooltipProvider>
       
-      <ReactQueryDevtools initialIsOpen={false} />
+      {import.meta.env.DEV && ReactQueryDevtoolsLazy && (
+        <Suspense>
+          <ReactQueryDevtoolsLazy initialIsOpen={false} />
+        </Suspense>
+      )}
     </QueryClientProvider>
   );
+}
+
+// Prefetch likely-next routes after a short idle to improve perceived nav speed
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    Promise.all([
+      import('./pages/Tutorials'),
+      import('./pages/Reports'),
+      import('./pages/TutorialBuilder'),
+    ]).catch(() => {});
+  }, 1500);
 }
 
 export default App;

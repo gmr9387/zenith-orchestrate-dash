@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { TutorialSearch } from '../components/TutorialSearch';
 import { StepManagement } from '../components/StepManagement';
 import { StorageConfig } from '../components/StorageConfig';
-import WorkflowEngine from '../components/WorkflowEngine';
-import VideoPlatform from '../components/VideoPlatform';
-import ApiGateway from '../components/ApiGateway';
+const WorkflowEngine = lazy(() => import('../components/WorkflowEngine'));
+const VideoPlatform = lazy(() => import('../components/VideoPlatform'));
+const ApiGateway = lazy(() => import('../components/ApiGateway'));
 import { 
   BookOpen, 
   Users, 
@@ -210,7 +210,9 @@ const TutorialBuilder: React.FC = () => {
                   Build powerful automation workflows that rival Zapier and Integromat
                 </p>
               </div>
-              <WorkflowEngine />
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading workflow engine…</div>}>
+                <WorkflowEngine />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="videos" className="mt-6">
@@ -220,7 +222,9 @@ const TutorialBuilder: React.FC = () => {
                   Professional video hosting and streaming platform with enterprise features
                 </p>
               </div>
-              <VideoPlatform />
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading video platform…</div>}>
+                <VideoPlatform />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="api" className="mt-6">
@@ -230,7 +234,9 @@ const TutorialBuilder: React.FC = () => {
                   Advanced API testing and management platform for developers
                 </p>
               </div>
-              <ApiGateway />
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading API gateway…</div>}>
+                <ApiGateway />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="storage" className="mt-6">

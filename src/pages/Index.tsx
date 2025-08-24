@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,21 +8,21 @@ import {
   Play, Plus, Calendar, Settings, Search, Command,
   TrendingUp, Activity, ExternalLink, Bell, BookOpen, Filter
 } from 'lucide-react';
-import { CommandPalette } from '@/components/CommandPalette';
+// Removed unused CommandPalette to reduce bundle size
 import { HeroMetrics } from '@/components/HeroMetrics';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { ToolCard } from '@/components/ToolCard';
 import { toast } from '@/components/ui/sonner';
-import { NetworkVisualization } from '@/components/NetworkVisualization';
+const NetworkVisualization = lazy(() => import('@/components/NetworkVisualization').then(m => ({ default: m.NetworkVisualization })));
 import { apiClient } from '@/lib/api';
 
 // Import hero images
-import apiHubHero from '@/assets/api-hub-hero.jpg';
-import tutorialBuilderHero from '@/assets/tutorial-builder-hero.jpg';
-import videoCreatorHero from '@/assets/video-creator-hero.jpg';
-import workflowEngineHero from '@/assets/workflow-engine-hero.jpg';
-import appBuilderHero from '@/assets/app-builder-hero.jpg';
-import crmSuiteHero from '@/assets/crm-suite-hero.jpg';
+import apiHubHero from '@/assets/api-hub-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
+import tutorialBuilderHero from '@/assets/tutorial-builder-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
+import videoCreatorHero from '@/assets/video-creator-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
+import workflowEngineHero from '@/assets/workflow-engine-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
+import appBuilderHero from '@/assets/app-builder-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
+import crmSuiteHero from '@/assets/crm-suite-hero.jpg?as=picture&w=480;768;1080;1440&format=avif;webp;jpg';
 
 const Index: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -255,7 +255,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="API Hub"
           description="Integration management with live network visualizations"
-          image={apiHubHero}
+          pictureSources={(apiHubHero as any).sources}
+          pictureImg={(apiHubHero as any).img}
           icon={<Share className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening API Hub', 'Deep link coming soon')}
           metrics={[
@@ -268,7 +269,9 @@ const Index: React.FC = () => {
           ]}
         >
           <div className="mb-4">
-            <NetworkVisualization />
+            <Suspense fallback={<div className="text-sm text-purple-300">Loading visualization…</div>}>
+              <NetworkVisualization />
+            </Suspense>
           </div>
         </ToolCard>
 
@@ -276,7 +279,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="Tutorial Builder"
           description="AI-powered screen recording and tutorial generation"
-          image={tutorialBuilderHero}
+          pictureSources={(tutorialBuilderHero as any).sources}
+          pictureImg={(tutorialBuilderHero as any).img}
           icon={<Video className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening Tutorial Builder')}
           onPreview={async () => {
@@ -312,7 +316,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="Video Creator"
           description="Browser-native video editing with Hollywood-level capabilities"
-          image={videoCreatorHero}
+          pictureSources={(videoCreatorHero as any).sources}
+          pictureImg={(videoCreatorHero as any).img}
           icon={<Video className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening Video Creator')}
           metrics={[
@@ -329,7 +334,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="Workflow Engine"
           description="Visual business process automation that rivals Zapier"
-          image={workflowEngineHero}
+          pictureSources={(workflowEngineHero as any).sources}
+          pictureImg={(workflowEngineHero as any).img}
           icon={<Zap className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening Workflow Engine')}
           metrics={[
@@ -346,7 +352,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="App Builder"
           description="Low-code platform for building custom business applications"
-          image={appBuilderHero}
+          pictureSources={(appBuilderHero as any).sources}
+          pictureImg={(appBuilderHero as any).img}
           icon={<Wrench className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening App Builder')}
           metrics={[
@@ -363,7 +370,8 @@ const Index: React.FC = () => {
         <ToolCard
           title="CRM Suite"
           description="Next-generation customer relationship management"
-          image={crmSuiteHero}
+          pictureSources={(crmSuiteHero as any).sources}
+          pictureImg={(crmSuiteHero as any).img}
           icon={<Users className="h-6 w-6 text-purple-400" />}
           onOpen={() => openToast('Opening CRM Suite')}
           metrics={[
