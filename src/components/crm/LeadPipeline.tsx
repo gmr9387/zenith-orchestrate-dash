@@ -94,18 +94,11 @@ export const LeadPipeline: React.FC = () => {
     });
   };
 
-  const onDragStart = (e: React.DragEvent, lead: Lead) => {
+  const onDragStart = (lead: Lead) => {
     setDraggedLead(lead);
-    e.dataTransfer.effectAllowed = 'move';
   };
 
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const onDrop = (e: React.DragEvent, targetStage: string) => {
-    e.preventDefault();
+  const onDragEnd = (targetStage: string) => {
     if (draggedLead && draggedLead.stage !== targetStage) {
       handleUpdateLeadStage(draggedLead.id, targetStage);
     }
@@ -183,8 +176,6 @@ export const LeadPipeline: React.FC = () => {
             <div
               key={stage.id}
               className="min-w-[280px]"
-              onDragOver={onDragOver}
-              onDrop={(e) => onDrop(e, stage.id)}
             >
               <Card className="glass-card h-full">
                 <CardHeader className="pb-3">
@@ -206,15 +197,16 @@ export const LeadPipeline: React.FC = () => {
                 <CardContent className="space-y-3 pb-4">
                   <AnimatePresence>
                     {stageLeads.map((lead) => (
-                      <motion.div
+                       <motion.div
                         key={lead.id}
                         layout
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ duration: 0.2 }}
-                        draggable
-                        onDragStart={(e: React.DragEvent) => onDragStart(e, lead)}
+                        drag
+                        onDragStart={() => onDragStart(lead)}
+                        onDragEnd={() => onDragEnd(stage.id)}
                         className="cursor-move"
                       >
                         <Card className="glass-card hover-lift border-l-4 border-l-primary">
