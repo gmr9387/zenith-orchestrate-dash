@@ -28,7 +28,7 @@ export function ExecutionLogs({ executionId }: ExecutionLogsProps) {
   const loadLogs = async () => {
     try {
       const response = await workflowExecutionApi.getExecutionLogs(executionId, { limit: 100 });
-      setLogs(response.logs);
+      setLogs(response.data.logs);
     } catch (error) {
       toast({
         title: "Error",

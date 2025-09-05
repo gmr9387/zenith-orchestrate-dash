@@ -24,8 +24,8 @@ export function LivePreview({ project }: LivePreviewProps) {
   const loadPreview = async () => {
     setLoading(true);
     try {
-      const preview = await appBuilderApi.getPreview(project.id);
-      setPreviewUrl(preview.previewUrl);
+      const response = await appBuilderApi.getPreview(project.id);
+      setPreviewUrl(response.data.previewUrl);
     } catch (error) {
       toast({
         title: "Error",

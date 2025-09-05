@@ -44,8 +44,8 @@ export function WorkflowMonitor() {
         workflowExecutionApi.getExecutions({ limit: 50 }),
         workflowExecutionApi.getMetrics()
       ]);
-      setExecutions(executionsRes.executions);
-      setMetrics(metricsRes);
+      setExecutions(executionsRes.data.executions);
+      setMetrics(metricsRes.data);
     } catch (error) {
       toast({
         title: "Error",

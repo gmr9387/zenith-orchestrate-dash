@@ -48,6 +48,7 @@ export interface AppProject {
 export interface ComponentLibraryItem {
   id: string;
   name: string;
+  type: string;
   category: string;
   description: string;
   thumbnail: string;
