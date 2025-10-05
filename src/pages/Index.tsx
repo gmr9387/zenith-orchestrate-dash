@@ -257,14 +257,14 @@ const Index: React.FC = () => {
           description="Integration management with live network visualizations"
           image={apiHubHero}
           icon={<Share className="h-6 w-6 text-purple-400" />}
-          onOpen={() => openToast('Opening API Hub', 'Deep link coming soon')}
+          onOpen={() => { window.location.href = '/api-gateway'; }}
           metrics={[
             { label: 'Active Integrations', value: '89', color: 'text-green-400' },
             { label: 'Data Processed', value: '2.4TB', color: 'text-purple-400' },
           ]}
           actions={[
-            { label: 'Add Integration', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Add Integration', 'Connector gallery coming soon') },
-            { label: 'Analytics', icon: <BarChart3 className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Analytics') },
+            { label: 'Manage APIs', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/api-gateway'; } },
+            { label: 'Analytics', icon: <BarChart3 className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/api-gateway'; } },
           ]}
         >
           <div className="mb-4">
@@ -314,14 +314,14 @@ const Index: React.FC = () => {
           description="Browser-native video editing with Hollywood-level capabilities"
           image={videoCreatorHero}
           icon={<Video className="h-6 w-6 text-purple-400" />}
-          onOpen={() => openToast('Opening Video Creator')}
+          onOpen={() => { window.location.href = '/video-management'; }}
           metrics={[
             { label: 'Projects Active', value: '23', color: 'text-yellow-400' },
             { label: 'Rendered This Week', value: '156', color: 'text-green-400' },
           ]}
           actions={[
-            { label: 'New Project', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Create Video Project', 'Template picker coming soon') },
-            { label: 'Templates', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Templates') },
+            { label: 'Manage Videos', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/video-management'; } },
+            { label: 'View Library', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/video-management'; } },
           ]}
         />
 
@@ -331,14 +331,14 @@ const Index: React.FC = () => {
           description="Visual business process automation that rivals Zapier"
           image={workflowEngineHero}
           icon={<Zap className="h-6 w-6 text-purple-400" />}
-          onOpen={() => openToast('Opening Workflow Engine')}
+          onOpen={() => { window.location.href = '/workflow-monitor'; }}
           metrics={[
             { label: 'Active Workflows', value: '247', color: 'text-purple-400' },
             { label: 'Tasks Automated', value: '12.4K', color: 'text-green-400' },
           ]}
           actions={[
-            { label: 'Create Workflow', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Create Workflow', 'Drag-and-drop builder coming soon') },
-            { label: 'Templates', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Templates') },
+            { label: 'View Monitor', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/workflow-monitor'; } },
+            { label: 'Executions', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/workflow-monitor'; } },
           ]}
         />
 
@@ -348,14 +348,14 @@ const Index: React.FC = () => {
           description="Low-code platform for building custom business applications"
           image={appBuilderHero}
           icon={<Wrench className="h-6 w-6 text-purple-400" />}
-          onOpen={() => openToast('Opening App Builder')}
+          onOpen={() => { window.location.href = '/app-builder'; }}
           metrics={[
             { label: 'Apps Built', value: '34', color: 'text-green-400' },
             { label: 'Components', value: '500+', color: 'text-purple-400' },
           ]}
           actions={[
-            { label: 'Build App', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Build App', 'Schema to React generator next') },
-            { label: 'Component Library', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Components') },
+            { label: 'Build App', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/app-builder'; } },
+            { label: 'Component Library', icon: <ExternalLink className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/app-builder'; } },
           ]}
         />
 
@@ -365,14 +365,14 @@ const Index: React.FC = () => {
           description="Next-generation customer relationship management"
           image={crmSuiteHero}
           icon={<Users className="h-6 w-6 text-purple-400" />}
-          onOpen={() => openToast('Opening CRM Suite')}
+          onOpen={() => { window.location.href = '/crm'; }}
           metrics={[
             { label: 'Active Contacts', value: '8,567', color: 'text-green-400' },
             { label: 'Pipeline Value', value: '$2.4M', color: 'text-purple-400' },
           ]}
           actions={[
-            { label: 'Add Contact', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => openToast('Add Contact', 'Contact form coming soon') },
-            { label: 'View Pipeline', icon: <TrendingUp className="h-4 w-4" />, variant: 'outline', onClick: () => openToast('Opening Pipeline') },
+            { label: 'Open CRM', icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => { window.location.href = '/crm'; } },
+            { label: 'View Pipeline', icon: <TrendingUp className="h-4 w-4" />, variant: 'outline', onClick: () => { window.location.href = '/crm'; } },
           ]}
         />
       </div>

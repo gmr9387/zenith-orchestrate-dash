@@ -23,6 +23,11 @@ import TutorialAuto from './pages/TutorialAuto';
 import TutorialView from './pages/TutorialView';
 import VerifyEmail from './pages/VerifyEmail';
 import Reports from './pages/Reports';
+import AppBuilder from './pages/AppBuilder';
+import WorkflowMonitor from './pages/WorkflowMonitor';
+import ApiGateway from './pages/ApiGateway';
+import CrmSuite from './pages/CrmSuite';
+import VideoManagement from './pages/VideoManagement';
 import './styles/animations.css';
 
 // Create a client
@@ -257,6 +262,46 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Reports />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/app-builder" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AppBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/workflow-monitor" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <WorkflowMonitor />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/api-gateway" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ApiGateway />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/crm" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CrmSuite />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/video-management" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VideoManagement />
                 </DashboardLayout>
               </ProtectedRoute>
             } />

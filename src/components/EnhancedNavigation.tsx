@@ -115,22 +115,40 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({ user, onLogout 
       description: 'Create and manage tutorials'
     },
     { 
-      path: '/workflows', 
-      label: 'Workflows', 
+      path: '/workflow-monitor', 
+      label: 'Workflow Monitor', 
       icon: Workflow,
-      description: 'Automation and workflows'
+      description: 'Monitor workflow executions'
     },
     { 
-      path: '/videos', 
+      path: '/video-management', 
       label: 'Videos', 
       icon: Video,
       description: 'Video management platform'
     },
     { 
-      path: '/api', 
+      path: '/api-gateway', 
       label: 'API Gateway', 
       icon: Code,
       description: 'API testing and management'
+    },
+    { 
+      path: '/app-builder', 
+      label: 'App Builder', 
+      icon: Globe,
+      description: 'Build custom applications'
+    },
+    { 
+      path: '/crm', 
+      label: 'CRM Suite', 
+      icon: Users,
+      description: 'Customer relationship management'
+    },
+    { 
+      path: '/reports', 
+      label: 'Reports', 
+      icon: BarChart3,
+      description: 'Analytics and insights'
     },
     { 
       path: '/profile', 

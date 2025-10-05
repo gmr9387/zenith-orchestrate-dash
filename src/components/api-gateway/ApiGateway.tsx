@@ -7,10 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiGatewayApi, ApiEndpoint, ApiKey, ApiAnalytics } from '@/lib/api-gateway-api';
 import { useToast } from '@/hooks/use-toast';
-// import { EndpointManager } from './EndpointManager';
-// import { ApiKeyManager } from './ApiKeyManager';
-// import { RequestLogs } from './RequestLogs';
-// import { GatewayAnalytics } from './GatewayAnalytics';
+import { EndpointManager } from './EndpointManager';
+import { ApiKeyManager } from './ApiKeyManager';
 import { 
   Plus, 
   Search, 
@@ -211,15 +209,21 @@ export function ApiGateway() {
         </TabsList>
 
         <TabsContent value="endpoints">
-          <div className="text-center py-8 text-muted-foreground">
-            Endpoint Manager - Coming Soon
-          </div>
+          <EndpointManager
+            endpoints={endpoints}
+            onCreateEndpoint={handleCreateEndpoint}
+            onUpdateEndpoint={handleUpdateEndpoint}
+            onDeleteEndpoint={handleDeleteEndpoint}
+          />
         </TabsContent>
 
         <TabsContent value="keys">
-          <div className="text-center py-8 text-muted-foreground">
-            API Key Manager - Coming Soon
-          </div>
+          <ApiKeyManager
+            apiKeys={apiKeys}
+            onCreateApiKey={handleCreateApiKey}
+            onUpdateApiKey={handleUpdateApiKey}
+            onDeleteApiKey={handleDeleteApiKey}
+          />
         </TabsContent>
 
         <TabsContent value="logs">
