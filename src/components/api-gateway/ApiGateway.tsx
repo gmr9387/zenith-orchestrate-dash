@@ -9,6 +9,8 @@ import { apiGatewayApi, ApiEndpoint, ApiKey, ApiAnalytics } from '@/lib/api-gate
 import { useToast } from '@/hooks/use-toast';
 import { EndpointManager } from './EndpointManager';
 import { ApiKeyManager } from './ApiKeyManager';
+import { RequestLogs } from './RequestLogs';
+import { GatewayAnalytics } from './GatewayAnalytics';
 import { 
   Plus, 
   Search, 
@@ -227,15 +229,11 @@ export function ApiGateway() {
         </TabsContent>
 
         <TabsContent value="logs">
-          <div className="text-center py-8 text-muted-foreground">
-            Request Logs - Coming Soon
-          </div>
+          <RequestLogs />
         </TabsContent>
 
         <TabsContent value="analytics">
-          <div className="text-center py-8 text-muted-foreground">
-            Gateway Analytics - Coming Soon
-          </div>
+          <GatewayAnalytics />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -6,29 +6,32 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { authManager } from './lib/auth';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import TutorialBuilder from './pages/TutorialBuilder';
-import UserProfile from './pages/UserProfile';
 import DashboardLayout from './components/DashboardLayout';
 import HeroSection from './components/HeroSection';
 import EnhancedNavigation from './components/EnhancedNavigation';
-import NotFound from './pages/NotFound';
-import TutorialRecord from './pages/TutorialRecord';
-import Tutorials from './pages/Tutorials';
-import TutorialAuto from './pages/TutorialAuto';
-import TutorialView from './pages/TutorialView';
-import VerifyEmail from './pages/VerifyEmail';
-import Reports from './pages/Reports';
-import AppBuilder from './pages/AppBuilder';
-import WorkflowMonitor from './pages/WorkflowMonitor';
-import ApiGateway from './pages/ApiGateway';
-import CrmSuite from './pages/CrmSuite';
-import VideoManagement from './pages/VideoManagement';
 import './styles/animations.css';
+
+// Lazy load pages for better performance
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const TutorialBuilder = lazy(() => import('./pages/TutorialBuilder'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const TutorialRecord = lazy(() => import('./pages/TutorialRecord'));
+const Tutorials = lazy(() => import('./pages/Tutorials'));
+const TutorialAuto = lazy(() => import('./pages/TutorialAuto'));
+const TutorialView = lazy(() => import('./pages/TutorialView'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const Reports = lazy(() => import('./pages/Reports'));
+const AppBuilder = lazy(() => import('./pages/AppBuilder'));
+const WorkflowMonitor = lazy(() => import('./pages/WorkflowMonitor'));
+const ApiGateway = lazy(() => import('./pages/ApiGateway'));
+const CrmSuite = lazy(() => import('./pages/CrmSuite'));
+const VideoManagement = lazy(() => import('./pages/VideoManagement'));
 
 // Create a client
 const queryClient = new QueryClient({
@@ -173,10 +176,16 @@ function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <Routes>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <BrowserRouter>
+            <Suspense fallback={
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            }>
+              <Routes>
             {/* Landing Page Route */}
             <Route path="/landing" element={<LandingPage />} />
 
@@ -308,14 +317,16 @@ function App() {
 
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-        <Toaster />
-        <Sonner />
-      </TooltipProvider>
-      
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Toaster />
+          <Sonner />
+        </TooltipProvider>
+        
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
