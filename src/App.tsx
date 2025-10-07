@@ -5,11 +5,9 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { authManager } from './lib/auth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Index from './pages/Index';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import Auth from './pages/Auth';
 import DashboardLayout from './components/DashboardLayout';
 import HeroSection from './components/HeroSection';
 import EnhancedNavigation from './components/EnhancedNavigation';
@@ -43,13 +41,28 @@ const queryClient = new QueryClient({
   },
 });
 
-// Protected Route Component
+// Protected Route Component with Supabase
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
-  const isAuthenticated = demoModeEnabled || authManager.isAuthenticated();
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  
+  useEffect(() => {
+    import('@/lib/supabase-auth').then(({ auth }) => {
+      auth.getSession().then(({ session }) => {
+        setIsAuthenticated(!!session);
+      });
+    });
+  }, []);
+  
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
   
   return <>{children}</>;
@@ -57,7 +70,23 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirects authenticated users)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isAuthenticated = authManager.isAuthenticated();
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  
+  useEffect(() => {
+    import('@/lib/supabase-auth').then(({ auth }) => {
+      auth.getSession().then(({ session }) => {
+        setIsAuthenticated(!!session);
+      });
+    });
+  }, []);
+  
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -190,14 +219,9 @@ function App() {
             <Route path="/landing" element={<LandingPage />} />
 
             {/* Public Routes */}
-            <Route path="/login" element={
+            <Route path="/auth" element={
               <PublicRoute>
-                <Login />
-              </PublicRoute>
-            } />
-            <Route path="/register" element={
-              <PublicRoute>
-                <Register />
+                <Auth />
               </PublicRoute>
             } />
             <Route path="/forgot-password" element={

@@ -1,0 +1,13 @@
+project_id = "dohylxpycszomesmzrbo"
+
+[functions.generate-tutorial]
+verify_jwt = true
+
+[functions.process-video]
+verify_jwt = true
+
+[functions.execute-workflow]
+verify_jwt = true
+
+[functions.proxy-api-request]
+verify_jwt = false
